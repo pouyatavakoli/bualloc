@@ -98,6 +98,53 @@ HeapErrorCode hinit(size_t initial_bytes) {
 }
 
 // TODO: void *halloc(size_t size)
+void *halloc(size_t size) {
+    if (!_heap.initialized || size == 0) {
+        errno = EINVAL;
+        return NULL;
+    }
+
+    Header *prevp = _heap.freep;
+    Header *p = prevp->s.ptr;
+
+    /* Align requested size to multiple of HEADER_SIZE_BYTES */
+    size_t total_size = ((size + HEADER_SIZE_BYTES - 1) & ~SIZE_ALIGN_MASK) + HEADER_SIZE_BYTES;
+
+    /* Traverse circular free list (first-fit) */
+    do {
+        if (!IS_INUSE(p) && BLOCK_BYTES(p) >= total_size) {
+            size_t remaining = BLOCK_BYTES(p) - total_size;
+
+            if (remaining >= HEADER_SIZE_BYTES * 2) { // split if remainder is big enough
+                /* Create a new free block for the tail */
+                Header *tail = (Header *)((char *)p + total_size);
+                tail->s.size = remaining;
+                tail->s.ptr = p->s.ptr;
+
+                /* Update current block */
+                p->s.size = total_size;
+                p->s.ptr = tail;
+            }
+
+            /* Mark block as in-use */
+            SET_INUSE(p);
+
+            /* Update freep to previous block */
+            _heap.freep = prevp;
+
+            /* Return pointer to payload (after header) */
+            return (void *)(p + 1);
+        }
+
+        prevp = p;
+        p = p->s.ptr;
+    } while (p != _heap.freep);
+
+    /* No suitable block found */
+    errno = ENOMEM;
+    return NULL;
+}
+
 
 // TODO: void hfree(void *ptr)
 

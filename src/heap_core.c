@@ -146,7 +146,38 @@ void *halloc(size_t size) {
 }
 
 
-// TODO: void hfree(void *ptr)
+void hfree(void *ptr) {
+    if (!_heap.initialized || !ptr) {
+        return;
+    }
+
+    Header *bp = (Header *)ptr - 1; 
+    CLEAR_INUSE(bp);                
+
+    Header *p;
+    for (p = _heap.freep; !(bp > p && bp < p->s.ptr); p = p->s.ptr) {
+        if (p >= p->s.ptr && (bp > p || bp < p->s.ptr)) {
+            break;
+        }
+    }
+
+    if ((Header *)((char *)bp + BLOCK_BYTES(bp)) == p->s.ptr) {
+        bp->s.size += BLOCK_BYTES(p->s.ptr);
+        bp->s.ptr = p->s.ptr->s.ptr;
+    } else {
+        bp->s.ptr = p->s.ptr;
+    }
+
+    if ((Header *)((char *)p + BLOCK_BYTES(p)) == bp) {
+        p->s.size += BLOCK_BYTES(bp);
+        p->s.ptr = bp->s.ptr;
+    } else {
+        p->s.ptr = bp;
+    }
+
+    _heap.freep = p; 
+}
+
 
 #include <stdint.h>
 #include <stdio.h>

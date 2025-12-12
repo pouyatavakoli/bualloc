@@ -97,7 +97,6 @@ HeapErrorCode hinit(size_t initial_bytes) {
   return HEAP_SUCCESS;
 }
 
-// TODO: void *halloc(size_t size)
 void *halloc(size_t size) {
     if (!_heap.initialized || size == 0) {
         errno = EINVAL;
@@ -179,11 +178,6 @@ void hfree(void *ptr) {
 }
 
 
-#include <stdint.h>
-#include <stdio.h>
-
-#include "heap.h"
-#include "heap_internal.h"
 
 /* Debug: full heap dump */
 void heap_dump(void) {

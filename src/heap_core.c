@@ -77,8 +77,8 @@ HeapErrorCode hinit(size_t initial_bytes) {
   }
 
   /* Initialize heap control structures */
-  _heap.base.s.ptr = &_heap.base;
-  _heap.base.s.size = 0; /* sentinel size 0, flags cleared */
+  _heap.base.Info.next_ptr = &_heap.base;
+  _heap.base.Info.size = 0; /* sentinel size 0, flags cleared */
   _heap.freep = &_heap.base;
   _heap.start_addr = mem;
   _heap.heap_size = heap_size;
@@ -87,11 +87,11 @@ HeapErrorCode hinit(size_t initial_bytes) {
   /* Create a single free block that covers the whole mapped region.
      Store block length in bytes and ensure flag bits are cleared. */
   Header* first_block = (Header*)mem;
-  first_block->s.size = (heap_size & HEAP_SIZE_MASK);
-  first_block->s.ptr = &_heap.base;
+  first_block->Info.size = (heap_size & HEAP_SIZE_MASK);
+  first_block->Info.next_ptr = &_heap.base;
 
   /* Insert into free list: base -> first_block -> base (circular) */
-  _heap.base.s.ptr = first_block;
+  _heap.base.Info.next_ptr = first_block;
   _heap.freep = &_heap.base;
 
   return HEAP_SUCCESS;
@@ -104,7 +104,7 @@ void *halloc(size_t size) {
     }
 
     Header *prevp = _heap.freep;
-    Header *p = prevp->s.ptr;
+    Header *p = prevp->Info.next_ptr;
 
     /* Align requested size to multiple of HEADER_SIZE_BYTES */
     size_t total_size = ((size + HEADER_SIZE_BYTES - 1) & ~SIZE_ALIGN_MASK) + HEADER_SIZE_BYTES;
@@ -117,12 +117,12 @@ void *halloc(size_t size) {
             if (remaining >= HEADER_SIZE_BYTES * 2) { // split if remainder is big enough
                 /* Create a new free block for the tail */
                 Header *tail = (Header *)((char *)p + total_size);
-                tail->s.size = remaining;
-                tail->s.ptr = p->s.ptr;
+                tail->Info.size = remaining;
+                tail->Info.next_ptr = p->Info.next_ptr;
 
                 /* Update current block */
-                p->s.size = total_size;
-                p->s.ptr = tail;
+                p->Info.size = total_size;
+                p->Info.next_ptr = tail;
             }
 
             /* Mark block as in-use */
@@ -136,7 +136,7 @@ void *halloc(size_t size) {
         }
 
         prevp = p;
-        p = p->s.ptr;
+        p = p->Info.next_ptr;
     } while (p != _heap.freep);
 
     /* No suitable block found */
@@ -154,24 +154,24 @@ void hfree(void *ptr) {
     CLEAR_INUSE(bp);                
 
     Header *p;
-    for (p = _heap.freep; !(bp > p && bp < p->s.ptr); p = p->s.ptr) {
-        if (p >= p->s.ptr && (bp > p || bp < p->s.ptr)) {
+    for (p = _heap.freep; !(bp > p && bp < p->Info.next_ptr); p = p->Info.next_ptr) {
+        if (p >= p->Info.next_ptr && (bp > p || bp < p->Info.next_ptr)) {
             break;
         }
     }
 
-    if ((Header *)((char *)bp + BLOCK_BYTES(bp)) == p->s.ptr) {
-        bp->s.size += BLOCK_BYTES(p->s.ptr);
-        bp->s.ptr = p->s.ptr->s.ptr;
+    if ((Header *)((char *)bp + BLOCK_BYTES(bp)) == p->Info.next_ptr) {
+        bp->Info.size += BLOCK_BYTES(p->Info.next_ptr);
+        bp->Info.next_ptr = p->Info.next_ptr->Info.next_ptr;
     } else {
-        bp->s.ptr = p->s.ptr;
+        bp->Info.next_ptr = p->Info.next_ptr;
     }
 
     if ((Header *)((char *)p + BLOCK_BYTES(p)) == bp) {
-        p->s.size += BLOCK_BYTES(bp);
-        p->s.ptr = bp->s.ptr;
+        p->Info.size += BLOCK_BYTES(bp);
+        p->Info.next_ptr = bp->Info.next_ptr;
     } else {
-        p->s.ptr = bp;
+        p->Info.next_ptr = bp;
     }
 
     _heap.freep = p; 
@@ -189,7 +189,7 @@ void heap_dump(void) {
   printf("Heap dump: start=%p, total_size=%zu bytes\n", _heap.start_addr,
          _heap.heap_size);
 
-  Header* p = _heap.base.s.ptr;
+  Header* p = _heap.base.Info.next_ptr;
   if (!p) {
     printf("Free list empty.\n");
     return;
@@ -203,7 +203,7 @@ void heap_dump(void) {
     if (p == &_heap.base) {
       /* Sentinel node */
       printf("  Block (sentinel): header=%p, size=0, inuse=no, next=%p\n",
-             (void*)p, (void*)p->s.ptr);
+             (void*)p, (void*)p->Info.next_ptr);
     } else {
       size_t total_size = BLOCK_BYTES(p);    // includes header
       void* payload_start = (void*)(p + 1);  // after header
@@ -217,10 +217,10 @@ void heap_dump(void) {
           "header_size=%zu, payload_size=%zu, total_size=%zu, "
           "inuse=%s, next=%p\n",
           block_num++, (void*)p, payload_start, header_size, payload_size,
-          total_size, inuse ? "yes" : "no", (void*)p->s.ptr);
+          total_size, inuse ? "yes" : "no", (void*)p->Info.next_ptr);
     }
 
-    p = p->s.ptr;
+    p = p->Info.next_ptr;
   } while (p != start);
 
   printf("End of free list\n");

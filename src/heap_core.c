@@ -98,40 +98,56 @@ HeapErrorCode hinit(size_t initial_bytes) {
 }
 
 // TODO: void *halloc(size_t size)
-
 void hfree(void *ptr) {
-    if (!_heap.initialized || !ptr) {
+    if (!_heap.initialized || ptr == NULL) {
         return;
     }
 
-    Header *bp = (Header *)ptr - 1; 
-    CLEAR_INUSE(bp);                
+    /* point to block header */
+    Header *bp = (Header *)ptr - 1;
 
-    Header *p;
-    for (p = _heap.freep; !(bp > p && bp < p->s.ptr); p = p->s.ptr) {
-        if (p >= p->s.ptr && (bp > p || bp < p->s.ptr)) {
+    /* only free if it was in use */
+    if (!IS_INUSE(bp)) {
+        return;
+    }
+
+    /* clear in-use flag */
+    CLEAR_INUSE(bp);
+
+    Header *p = _heap.freep;
+
+    /*
+     * Find the correct place in the circular free list:
+     * we want p < bp < p->Info.next_ptr in address space.
+     */
+    for (; !(bp > p && bp < p->Info.next_ptr); p = p->Info.next_ptr) {
+        /* wrapped around the arena */
+        if (p >= p->Info.next_ptr && (bp > p || bp < p->Info.next_ptr)) {
             break;
         }
     }
 
-    if ((Header *)((char *)bp + BLOCK_BYTES(bp)) == p->s.ptr) {
-        bp->s.size += BLOCK_BYTES(p->s.ptr);
-        bp->s.ptr = p->s.ptr->s.ptr;
+    /* try to merge with upper neighbor */
+    if ((Header *)((char *)bp + BLOCK_BYTES(bp)) == p->Info.next_ptr) {
+        /* join bp with upper neighbor */
+        bp->Info.size += BLOCK_BYTES(p->Info.next_ptr);
+        bp->Info.next_ptr = p->Info.next_ptr->Info.next_ptr;
     } else {
-        bp->s.ptr = p->s.ptr;
+        bp->Info.next_ptr = p->Info.next_ptr;
     }
 
+    /* try to merge with lower neighbor */
     if ((Header *)((char *)p + BLOCK_BYTES(p)) == bp) {
-        p->s.size += BLOCK_BYTES(bp);
-        p->s.ptr = bp->s.ptr;
+        /* join p with bp */
+        p->Info.size += BLOCK_BYTES(bp);
+        p->Info.next_ptr = bp->Info.next_ptr;
     } else {
-        p->s.ptr = bp;
+        p->Info.next_ptr = bp;
     }
 
-    _heap.freep = p; 
+    /* update freep */
+    _heap.freep = p;
 }
-
-
 #include <stdint.h>
 #include <stdio.h>
 

@@ -105,42 +105,44 @@ void *halloc(size_t size) {
     }
 
     Header *prevp = _heap.freep;
-    Header *p = prevp->s.ptr;
+    Header *p = prevp->Info.next_ptr;
 
-    /* Align requested size to multiple of HEADER_SIZE_BYTES */
-    size_t total_size = ((size + HEADER_SIZE_BYTES - 1) & ~SIZE_ALIGN_MASK) + HEADER_SIZE_BYTES;
+    size_t total_size =
+        ((size + HEADER_SIZE_BYTES - 1) & ~SIZE_ALIGN_MASK) + HEADER_SIZE_BYTES;
 
-    /* Traverse circular free list (first-fit) */
     do {
-        if (!IS_INUSE(p) && BLOCK_BYTES(p) >= total_size) {
+        if (BLOCK_BYTES(p) >= total_size && !IS_INUSE(p)) {
+
             size_t remaining = BLOCK_BYTES(p) - total_size;
 
-            if (remaining >= HEADER_SIZE_BYTES * 2) { // split if remainder is big enough
-                /* Create a new free block for the tail */
+            if (remaining >= HEADER_SIZE_BYTES * 2) {
+                /* split */
                 Header *tail = (Header *)((char *)p + total_size);
-                tail->s.size = remaining;
-                tail->s.ptr = p->s.ptr;
+                tail->Info.size = remaining;
+                CLEAR_INUSE(tail);
+                tail->Info.next_ptr = p->Info.next_ptr;
 
-                /* Update current block */
-                p->s.size = total_size;
-                p->s.ptr = tail;
+                /* replace p with tail in free list */
+                prevp->Info.next_ptr = tail;
+            } else {
+                /* allocate whole block */
+                total_size = BLOCK_BYTES(p);
+                prevp->Info.next_ptr = p->Info.next_ptr;
             }
 
-            /* Mark block as in-use */
+            /* mark allocated block */
+            p->Info.size = total_size;
             SET_INUSE(p);
 
-            /* Update freep to previous block */
             _heap.freep = prevp;
-
-            /* Return pointer to payload (after header) */
             return (void *)(p + 1);
         }
 
         prevp = p;
-        p = p->s.ptr;
+        p = p->Info.next_ptr;
+
     } while (p != _heap.freep);
 
-    /* No suitable block found */
     errno = ENOMEM;
     return NULL;
 }

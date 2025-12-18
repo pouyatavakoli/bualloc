@@ -97,86 +97,56 @@ HeapErrorCode hinit(size_t initial_bytes) {
   return HEAP_SUCCESS;
 }
 
-void *halloc(size_t size) {
-    if (!_heap.initialized || size == 0) {
-        errno = EINVAL;
-        return NULL;
-    }
-
-    Header *prevp = _heap.freep;
-    Header *p = prevp->Info.next_ptr;
-
-    size_t total_size =
-        ((size + HEADER_SIZE_BYTES - 1) & ~SIZE_ALIGN_MASK) + HEADER_SIZE_BYTES;
-
-    do {
-        if (BLOCK_BYTES(p) >= total_size && !IS_INUSE(p)) {
-
-            size_t remaining = BLOCK_BYTES(p) - total_size;
-
-            if (remaining >= HEADER_SIZE_BYTES * 2) {
-                /* split */
-                Header *tail = (Header *)((char *)p + total_size);
-                tail->Info.size = remaining;
-                CLEAR_INUSE(tail);
-                tail->Info.next_ptr = p->Info.next_ptr;
-
-                /* replace p with tail in free list */
-                prevp->Info.next_ptr = tail;
-            } else {
-                /* allocate whole block */
-                total_size = BLOCK_BYTES(p);
-                prevp->Info.next_ptr = p->Info.next_ptr;
-            }
-
-            /* mark allocated block */
-            p->Info.size = total_size;
-            SET_INUSE(p);
-
-            _heap.freep = prevp;
-            return (void *)(p + 1);
-        }
-
-        prevp = p;
-        p = p->Info.next_ptr;
-
-    } while (p != _heap.freep);
-
-    errno = ENOMEM;
-    return NULL;
-}
-
-
+// TODO: void *halloc(size_t size)
 void hfree(void *ptr) {
-    if (!_heap.initialized || !ptr) {
+    if (!_heap.initialized || ptr == NULL) {
         return;
     }
 
-    Header *bp = (Header *)ptr - 1; 
-    CLEAR_INUSE(bp);                
+    /* point to block header */
+    Header *bp = (Header *)ptr - 1;
 
-    Header *p;
-    for (p = _heap.freep; !(bp > p && bp < p->Info.next_ptr); p = p->Info.next_ptr) {
+    /* only free if it was in use */
+    if (!IS_INUSE(bp)) {
+        return;
+    }
+
+    /* clear in-use flag */
+    CLEAR_INUSE(bp);
+
+    Header *p = _heap.freep;
+
+    /*
+     * Find the correct place in the circular free list:
+     * we want p < bp < p->Info.next_ptr in address space.
+     */
+    for (; !(bp > p && bp < p->Info.next_ptr); p = p->Info.next_ptr) {
+        /* wrapped around the arena */
         if (p >= p->Info.next_ptr && (bp > p || bp < p->Info.next_ptr)) {
             break;
         }
     }
 
+    /* try to merge with upper neighbor */
     if ((Header *)((char *)bp + BLOCK_BYTES(bp)) == p->Info.next_ptr) {
+        /* join bp with upper neighbor */
         bp->Info.size += BLOCK_BYTES(p->Info.next_ptr);
         bp->Info.next_ptr = p->Info.next_ptr->Info.next_ptr;
     } else {
         bp->Info.next_ptr = p->Info.next_ptr;
     }
 
+    /* try to merge with lower neighbor */
     if ((Header *)((char *)p + BLOCK_BYTES(p)) == bp) {
+        /* join p with bp */
         p->Info.size += BLOCK_BYTES(bp);
         p->Info.next_ptr = bp->Info.next_ptr;
     } else {
         p->Info.next_ptr = bp;
     }
 
-    _heap.freep = p; 
+    /* update freep */
+    _heap.freep = p;
 }
 
 

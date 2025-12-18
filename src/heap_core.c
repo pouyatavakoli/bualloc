@@ -110,9 +110,30 @@ void* halloc(size_t size) {
     return NULL;
   }
 
-  size_t payload_size = (size + SIZE_ALIGN_MASK) & ~SIZE_ALIGN_MASK;
-  size_t total_size =
-      HEADER_SIZE_BYTES + FENCE_SIZE + payload_size + FENCE_SIZE;
+  size_t payload_size;
+  /* Guard: size + alignment */
+  if (size > SIZE_MAX - SIZE_ALIGN_MASK) {
+    errno = ENOMEM;
+    return NULL;
+  }
+
+  payload_size = (size + SIZE_ALIGN_MASK) & ~SIZE_ALIGN_MASK;
+
+  size_t total_size;
+
+  /* Guard: header + fences + payload */
+  if (payload_size > SIZE_MAX - HEADER_SIZE_BYTES - 2 * FENCE_SIZE) {
+    errno = ENOMEM;
+    return NULL;
+  }
+
+  total_size = HEADER_SIZE_BYTES + payload_size + 2 * FENCE_SIZE;
+
+  /* avoid walking the free list for impossible requests.*/
+  if (payload_size > _heap.heap_size) {
+    errno = ENOMEM;
+    return NULL;
+  }
 
   Header* prevp = _heap.freep;
   Header* p = prevp->Info.next_ptr;
@@ -266,16 +287,16 @@ void heap_walk_dump(void) {
 }
 
 void heap_raw_dump(void) {
-    if (!_heap.initialized) return;
+  if (!_heap.initialized) return;
 
-    uint8_t* start = (uint8_t*)_heap.start_addr;
-    uint8_t* end = start + _heap.heap_size;
+  uint8_t* start = (uint8_t*)_heap.start_addr;
+  uint8_t* end = start + _heap.heap_size;
 
-    size_t count = 0;
-    printf("\n            ");
-    for (uint8_t* p = start; p < end; p++, count++) {
-        if (count % 32 == 0 && count != 0) printf("\n            ");
-        printf("%02x ", *p);
-    }
-    printf("\n");
+  size_t count = 0;
+  printf("\n            ");
+  for (uint8_t* p = start; p < end; p++, count++) {
+    if (count % 32 == 0 && count != 0) printf("\n            ");
+    printf("%02x ", *p);
+  }
+  printf("\n");
 }

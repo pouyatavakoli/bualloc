@@ -8,6 +8,10 @@
 #define HEAP_MAGIC_ALLOC 0xDEADBEEF
 #define HEAP_MAGIC_FREE 0xBAADF00D
 
+/*payload fence*/
+#define FENCE_SIZE        16
+#define FENCE_PATTERN     0xA5
+
 /* Force header alignment to worst-case primitive */
 typedef long Align;
 

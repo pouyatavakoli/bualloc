@@ -99,6 +99,26 @@ HeapErrorCode hinit(size_t initial_bytes) {
   return HEAP_SUCCESS;
 }
 
+static int is_valid_heap_ptr(void* ptr) {
+  if (!_heap.initialized || ptr == NULL) return 0;
+
+  char* heap_start = (char*)_heap.start_addr;
+  char* heap_end = heap_start + _heap.heap_size;
+  Header* bp = (Header*)ptr - 1;
+
+  // Must be within heap memory
+  if ((char*)bp < heap_start || (char*)bp >= heap_end) return 0;
+
+  // Must be aligned to header size
+  if (((uintptr_t)bp & (HEADER_SIZE_BYTES - 1)) != 0) return 0;
+
+  // Optional: sanity check block size
+  size_t size = BLOCK_BYTES(bp);
+  if (size < sizeof(Header) || size > _heap.heap_size) return 0;
+
+  return 1;
+}
+
 void* halloc(size_t size) {
   if (!_heap.initialized || size == 0) {
     errno = EINVAL;
@@ -149,19 +169,20 @@ void* halloc(size_t size) {
 }
 
 void hfree(void* ptr) {
-  if (!_heap.initialized || ptr == NULL) {
+  if (!_heap.initialized || ptr == NULL) return;
+
+  if (!is_valid_heap_ptr(ptr)) {
+    fprintf(stderr, "Heap free error: invalid pointer %p\n", ptr);
     return;
   }
 
-  /* point to block header */
   Header* bp = (Header*)ptr - 1;
 
-  /* only free if it was in use */
   if (!IS_INUSE(bp)) {
+    fprintf(stderr, "Double free or free of non-allocated pointer at %p\n", bp);
     return;
   }
 
-  /* clear in-use flag */
   CLEAR_INUSE(bp);
 
   Header* p = _heap.freep;
@@ -248,34 +269,37 @@ void heap_free_dump(void) {
 }
 
 void heap_walk_dump(void) {
-    if (!_heap.initialized) {
-        printf("Heap not initialized.\n");
-        return;
-    }
+  if (!_heap.initialized) {
+    printf("Heap not initialized.\n");
+    return;
+  }
 
-    printf("Heap dump: start=%p, total_size=%zu bytes\n", _heap.start_addr,
-           _heap.heap_size);
+  printf("Heap dump: start=%p, total_size=%zu bytes\n", _heap.start_addr,
+         _heap.heap_size);
 
-    char* heap_start = (char*)_heap.start_addr;
-    char* heap_end = heap_start + _heap.heap_size;
-    size_t block_num = 0;
+  char* heap_start = (char*)_heap.start_addr;
+  char* heap_end = heap_start + _heap.heap_size;
+  size_t block_num = 0;
 
-    Header* p = (Header*)heap_start;
+  Header* p = (Header*)heap_start;
 
-    while ((char*)p < heap_end) {
-        size_t total_size = BLOCK_BYTES(p);
-        int inuse = IS_INUSE(p);
-        void* payload = (void*)(p + 1);
-        size_t payload_size = (total_size >= sizeof(Header)) ? total_size - sizeof(Header) : 0;
+  while ((char*)p < heap_end) {
+    size_t total_size = BLOCK_BYTES(p);
+    int inuse = IS_INUSE(p);
+    void* payload = (void*)(p + 1);
+    size_t payload_size =
+        (total_size >= sizeof(Header)) ? total_size - sizeof(Header) : 0;
 
-        printf("Block %zu: header=%p, payload=%p, total_size=%zu, payload_size=%zu, inuse=%s\n",
-               block_num, (void*)p, payload, total_size, payload_size, inuse ? "yes" : "no");
+    printf(
+        "Block %zu: header=%p, payload=%p, total_size=%zu, payload_size=%zu, "
+        "inuse=%s\n",
+        block_num, (void*)p, payload, total_size, payload_size,
+        inuse ? "yes" : "no");
 
-        if (total_size == 0) break;  // safety check to avoid infinite loop
-        p = (Header*)((char*)p + total_size);
-        block_num++;
-    }
+    if (total_size == 0) break;  // safety check to avoid infinite loop
+    p = (Header*)((char*)p + total_size);
+    block_num++;
+  }
 
-    printf("End of heap\n");
+  printf("End of heap\n");
 }
-

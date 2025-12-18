@@ -59,8 +59,7 @@ HeapErrorCode hinit(size_t initial_bytes) {
   if (heap_size < HEADER_SIZE_BYTES) {
     return HEAP_INIT_FAILED;
   }
-  heap_size -= (heap_size % HEADER_SIZE_BYTES);
-
+  heap_size &= ~(HEADER_SIZE_BYTES - 1);
   /* Ensure we have at least MIN_HEAP_UNITS header-sized blocks */
   if ((heap_size / HEADER_SIZE_BYTES) < (size_t)MIN_HEAP_UNITS) {
     return HEAP_INIT_FAILED;
@@ -91,6 +90,7 @@ HeapErrorCode hinit(size_t initial_bytes) {
   Header* first_block = (Header*)mem;
   first_block->Info.size = heap_size & HEAP_SIZE_MASK;
   first_block->Info.next_ptr = &_heap.base;
+  first_block->Info.magic = HEAP_MAGIC_FREE;
 
   /* Insert into free list: base -> first_block -> base (circular) */
   _heap.base.Info.next_ptr = first_block;
@@ -112,10 +112,13 @@ static int is_valid_heap_ptr(void* ptr) {
   // Must be aligned to header size
   if (((uintptr_t)bp & (HEADER_SIZE_BYTES - 1)) != 0) return 0;
 
-  // Optional: sanity check block size
+  // sanity check block size
   size_t size = BLOCK_BYTES(bp);
   if (size < sizeof(Header) || size > _heap.heap_size) return 0;
 
+  if (bp->Info.magic != HEAP_MAGIC_FREE && bp->Info.magic != HEAP_MAGIC_ALLOC) {
+    return 0;
+  }
   return 1;
 }
 
@@ -141,6 +144,7 @@ void* halloc(size_t size) {
         Header* tail = (Header*)((char*)p + total_size);
         tail->Info.size = remaining & HEAP_SIZE_MASK;
         tail->Info.next_ptr = p->Info.next_ptr;
+        tail->Info.magic = HEAP_MAGIC_FREE;
 
         /* replace p with tail in free list */
         prevp->Info.next_ptr = tail;
@@ -154,6 +158,7 @@ void* halloc(size_t size) {
 
       /* mark allocated block */
       SET_INUSE(p);
+      p->Info.magic = HEAP_MAGIC_ALLOC;
 
       _heap.freep = prevp;
       return (void*)(p + 1);
@@ -183,42 +188,47 @@ void hfree(void* ptr) {
     return;
   }
 
+  if (bp->Info.magic != HEAP_MAGIC_ALLOC) {
+    fprintf(stderr, "Heap corruption or double free detected at %p\n", bp);
+    return;
+  }
+
+  // Mark block as free
   CLEAR_INUSE(bp);
+  bp->Info.magic = HEAP_MAGIC_FREE;
 
   Header* p = _heap.freep;
 
-  /*
-   * Find the correct place in the circular free list:
-   * we want p < bp < p->Info.next_ptr in address space.
-   */
+  // Find correct position in circular free list (p < bp < p->next)
   for (; !(bp > p && bp < p->Info.next_ptr); p = p->Info.next_ptr) {
-    /* wrapped around the arena */
     if (p >= p->Info.next_ptr && (bp > p || bp < p->Info.next_ptr)) {
-      break;
+      break;  // wrap around
     }
   }
 
-  /* try to merge with upper neighbor */
-  if ((Header*)((char*)bp + BLOCK_BYTES(bp)) == p->Info.next_ptr) {
-    /* join bp with upper neighbor */
-    bp->Info.size =
-        (BLOCK_BYTES(bp) + BLOCK_BYTES(p->Info.next_ptr)) & HEAP_SIZE_MASK;
-    bp->Info.next_ptr = p->Info.next_ptr->Info.next_ptr;
+  Header* next = p->Info.next_ptr;
+  Header* prev = p;
+
+  // Try to merge with upper neighbor
+  if ((char*)bp + BLOCK_BYTES(bp) == (char*)next) {
+    bp->Info.size = (BLOCK_BYTES(bp) + BLOCK_BYTES(next)) & HEAP_SIZE_MASK;
+    bp->Info.next_ptr = next->Info.next_ptr;
+    bp->Info.magic = HEAP_MAGIC_FREE;
   } else {
-    bp->Info.next_ptr = p->Info.next_ptr;
+    bp->Info.next_ptr = next;
   }
 
-  /* try to merge with lower neighbor */
-  if ((Header*)((char*)p + BLOCK_BYTES(p)) == bp) {
-    /* join p with bp */
-    p->Info.size = (BLOCK_BYTES(p) + BLOCK_BYTES(bp)) & HEAP_SIZE_MASK;
-    p->Info.next_ptr = bp->Info.next_ptr;
+  // Try to merge with lower neighbor
+  if ((char*)prev + BLOCK_BYTES(prev) == (char*)bp) {
+    prev->Info.size = (BLOCK_BYTES(prev) + BLOCK_BYTES(bp)) & HEAP_SIZE_MASK;
+    prev->Info.next_ptr = bp->Info.next_ptr;
+    prev->Info.magic = HEAP_MAGIC_FREE;
   } else {
-    p->Info.next_ptr = bp;
+    prev->Info.next_ptr = bp;
   }
 
-  /* update freep */
-  _heap.freep = p;
+  // Update free pointer
+  _heap.freep = prev;
 }
 
 /* Debug: full heap dump */
@@ -291,12 +301,21 @@ void heap_walk_dump(void) {
         (total_size >= sizeof(Header)) ? total_size - sizeof(Header) : 0;
 
     printf(
-        "Block %zu: header=%p, payload=%p, total_size=%zu, payload_size=%zu, "
-        "inuse=%s\n",
+        "Block %zu:\n"
+        "  Header: %p\n"
+        "  Payload: %p\n"
+        "  Total size: %zu\n"
+        "  Payload size: %zu\n"
+        "  In-use: %s\n"
+        "  Magic: 0x%08x\n",
         block_num, (void*)p, payload, total_size, payload_size,
-        inuse ? "yes" : "no");
+        inuse ? "yes" : "no", p->Info.magic);
 
-    if (total_size == 0) break;  // safety check to avoid infinite loop
+    if (total_size == 0) {
+      printf("  Warning: block with size 0 detected, stopping dump.\n");
+      break;  // safety check to avoid infinite loop
+    }
+
     p = (Header*)((char*)p + total_size);
     block_num++;
   }

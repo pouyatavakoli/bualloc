@@ -146,6 +146,11 @@ Implementation details:
 
 ---
 
+## security
+
+- pointer validation before freeing
+---
+
 ## Error handling
 
 Error codes and messages live in `include/heap_errors.h`. The public functions return `HeapErrorCode` where appropriate (e.g., `hinit`) and use conventional C conventions elsewhere:

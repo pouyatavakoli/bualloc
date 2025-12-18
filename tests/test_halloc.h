@@ -13,12 +13,12 @@ void test_halloc(void) {
 
   void* p1 = halloc(1024);
   assert(p1 != NULL);
-  heap_dump();
+  heap_walk_dump();
   printf("pointer returned to user is: %p\n", p1);
 
   void* p2 = halloc(1024);
   assert(p2 != NULL);
-  heap_dump();
+  heap_walk_dump();
   printf("pointer returned to user is: %p\n", p2);
 
   //   void* p2 = halloc(2048);

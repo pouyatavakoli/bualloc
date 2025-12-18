@@ -8,6 +8,7 @@
 HeapErrorCode hinit(size_t initial_bytes);
 void* halloc(size_t size);
 void hfree(void* ptr);
-void heap_dump();
+void heap_free_dump();
+void heap_walk_dump();
 
 #endif

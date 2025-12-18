@@ -9,7 +9,7 @@
 void test_hinit(void) {
   HeapErrorCode rc = hinit(100 * 1024);
   assert(rc == HEAP_SUCCESS);
-  heap_dump();
+  heap_walk_dump();
   return;
 }
 #endif

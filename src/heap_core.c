@@ -1,4 +1,6 @@
 #define _GNU_SOURCE
+#define NUM_POOLS 4
+#define POOL_BLOCKS_PER_SIZE 128
 
 #include <errno.h>
 #include <limits.h>
@@ -31,8 +33,6 @@ static HeapErrorCode _heap_last_error = HEAP_SUCCESS;
 /* -------------------------------------------------------------------------- */
 /* Memory pools (bonus feature)                                               */
 /* -------------------------------------------------------------------------- */
-
-#define NUM_POOLS 4
 
 static const size_t pool_sizes[NUM_POOLS] = {32, 64, 128, 256};
 
@@ -166,6 +166,45 @@ HeapErrorCode hinit(size_t initial_bytes) {
 
   heap_set_error(HEAP_SUCCESS, 0);
   return HEAP_SUCCESS;
+}
+
+static void init_pools(void) {
+    for (int i = 0; i < NUM_POOLS; i++) {
+        size_t bsize = pool_sizes[i];
+        size_t total_size = bsize * POOL_BLOCKS_PER_SIZE;
+
+        void* mem = mmap(NULL, total_size, PROT_READ | PROT_WRITE,
+                         MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+
+        if (mem == MAP_FAILED) {
+          
+            heap_set_error(HEAP_OUT_OF_MEMORY, ENOMEM);
+            fprintf(stderr, "pool[%d] size=%zu: %s\n",
+                    i, bsize, heap_error_what(_heap_last_error));
+
+            _pools[i].pool_mem = NULL;
+            _pools[i].free_list = NULL;
+            _pools[i].total_blocks = 0;
+            continue;
+        }
+
+        _pools[i].block_size = bsize;
+        _pools[i].pool_mem = mem;
+        _pools[i].total_blocks = POOL_BLOCKS_PER_SIZE;
+
+        PoolBlock* head = (PoolBlock*)mem;
+        _pools[i].free_list = head;
+
+        PoolBlock* current = head;
+        for (size_t j = 1; j < POOL_BLOCKS_PER_SIZE; j++) {
+            PoolBlock* next = (PoolBlock*)((char*)mem + j * bsize);
+            current->next = next;
+            current = next;
+        }
+        current->next = NULL; 
+    }
+
+    heap_set_error(HEAP_SUCCESS, 0);
 }
 
 /* -------------------------------------------------------------------------- */

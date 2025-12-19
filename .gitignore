@@ -29,6 +29,7 @@
 *.dylib
 
 # Executables
+/bin
 *.exe
 *.out
 *.app
@@ -53,3 +54,6 @@ dkms.conf
 
 # debug information files
 *.dwo
+
+#editor
+.vscode

@@ -177,7 +177,7 @@ static void init_pools(void) {
                          MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 
         if (mem == MAP_FAILED) {
-          
+
             heap_set_error(HEAP_OUT_OF_MEMORY, ENOMEM);
             fprintf(stderr, "pool[%d] size=%zu: %s\n",
                     i, bsize, heap_error_what(_heap_last_error));
@@ -274,6 +274,27 @@ void* halloc(size_t size) {
 
   heap_set_error(HEAP_OUT_OF_MEMORY, ENOMEM);
   return NULL;
+}
+
+static void* pool_alloc(size_t size) {
+  
+    for (int i = 0; i < NUM_POOLS; i++) {
+        if (size <= _pools[i].block_size) {
+            if (_pools[i].free_list == NULL) {
+
+                heap_set_error(HEAP_OUT_OF_MEMORY, ENOMEM);
+                return NULL;
+            }
+
+            PoolBlock* block = _pools[i].free_list;
+            _pools[i].free_list = block->next;
+
+            heap_set_error(HEAP_SUCCESS, 0);
+            return (void*)block;
+        }
+    }
+
+    return NULL;
 }
 
 /* -------------------------------------------------------------------------- */

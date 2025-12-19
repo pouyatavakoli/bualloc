@@ -1,32 +1,48 @@
-#ifndef TEST_HFREE
-#define TEST_HFREE
-#include <assert.h>
-#include <stdio.h>
+#ifndef TEST_HFREE_H
+#define TEST_HFREE_H
 
 #include "heap.h"
-#include "heap_errors.h"
+#include "test_utils.h"
 
-void test_hfree(void) {
-  HeapErrorCode rc = hinit(64 * 1024);
-  assert(rc == HEAP_SUCCESS);
-  heap_walk_dump();
+static void test_hfree(void) {
+  LOG_TEST("Testing hfree...");
 
-  void* block1 = halloc(1024);
-  void* block2 = halloc(2048);
-  void* block3 = halloc(4096);
-  heap_walk_dump();
+  HeapErrorCode res = hinit(32 * 4);
+  assert(res == HEAP_SUCCESS);
+  ASSERT_HEAP_ERROR(HEAP_SUCCESS);
 
-  hfree(block2);
-  printf("\nHeap after freeing block2:\n");
-  heap_walk_dump();
+  void* p1 = halloc(16);
+  void* p2 = halloc(16);
+  void* p3 = halloc(16);
+  void* p4 = halloc(16);
+  DUMP_HEAP_PROMPT();
+  
+  hfree(p2);
+  ASSERT_HEAP_ERROR(HEAP_SUCCESS);
+  
+  hfree(p1);
+  hfree(p3);
+  ASSERT_HEAP_ERROR(HEAP_SUCCESS);
 
-  hfree(block1);
-  printf("\nHeap after freeing block1 (should coalesce with block2):\n");
-  heap_walk_dump();
+  printf("adjacent blocks freed, view dump to check coalescing\n");
+  //view dump to see coalescing
+  DUMP_HEAP_PROMPT();
 
-  hfree(block3);
-  printf("\nHeap after freeing block3 (full coalesce expected):\n");
-  heap_walk_dump();
-  return;
+  // double free
+  hfree(p1);
+  ASSERT_HEAP_ERROR(HEAP_DOUBLE_FREE);
+  ASSERT_ERRNO(EINVAL);
+
+  // invalid pointer
+  int dummy;
+  hfree(&dummy);
+  ASSERT_HEAP_ERROR(HEAP_INVALID_POINTER);
+  ASSERT_ERRNO(EINVAL);
+
+  hfree(p4);
+
+
+  DUMP_HEAP_PROMPT();
 }
+
 #endif

@@ -6,9 +6,14 @@
 #include "heap_errors.h"
 
 HeapErrorCode hinit(size_t initial_bytes);
+
+/* Allocation */
 void* halloc(size_t size);
 void hfree(void* ptr);
-void heap_walk_dump();
-void heap_raw_dump();
 
-#endif
+/* Diagnostics */
+HeapErrorCode heap_last_error(void);
+void heap_walk_dump(void);
+void heap_raw_dump(void);
+
+#endif /* HEAP_H */

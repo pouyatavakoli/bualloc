@@ -1,15 +1,23 @@
-#ifndef TEST_HINIT
-#define TEST_HINIT
-#include <assert.h>
-#include <stddef.h>
+#ifndef TEST_HINIT_H
+#define TEST_HINIT_H
 
 #include "heap.h"
-#include "heap_errors.h"
+#include "test_utils.h"
 
-void test_hinit(void) {
-  HeapErrorCode rc = hinit(100 * 1024);
-  assert(rc == HEAP_SUCCESS);
-  heap_walk_dump();
-  return;
+static void test_hinit(void) {
+  LOG_TEST("Testing heap initialization...");
+
+  // normal init
+  HeapErrorCode res = hinit(32 * 1024);
+  assert(res == HEAP_SUCCESS);
+  ASSERT_HEAP_ERROR(HEAP_SUCCESS);
+
+  // double init
+  res = hinit(64 * 1024);
+  ASSERT_HEAP_ERROR(HEAP_SUCCESS);
+
+
+  DUMP_HEAP_PROMPT();
 }
+
 #endif

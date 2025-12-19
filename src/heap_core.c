@@ -29,6 +29,27 @@ static HeapState _heap = {0};
 static HeapErrorCode _heap_last_error = HEAP_SUCCESS;
 
 /* -------------------------------------------------------------------------- */
+/* Memory pools (bonus feature)                                               */
+/* -------------------------------------------------------------------------- */
+
+#define NUM_POOLS 4
+
+static const size_t pool_sizes[NUM_POOLS] = {32, 64, 128, 256};
+
+typedef struct PoolBlock { 
+  struct PoolBlock* next; 
+} PoolBlock; 
+
+  typedef struct {
+    size_t block_size; 
+    size_t total_blocks; 
+    PoolBlock* free_list; 
+    void* pool_mem;
+} MemoryPool;
+
+static MemoryPool _pools[NUM_POOLS];
+
+/* -------------------------------------------------------------------------- */
 /* Utilities                                                                  */
 /* -------------------------------------------------------------------------- */
 

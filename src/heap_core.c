@@ -217,6 +217,11 @@ void* halloc(size_t size) {
     return NULL;
   }
 
+  void* pool_ptr = pool_alloc(size);
+  if (pool_ptr != NULL) { 
+    return pool_ptr; 
+  }
+
   if (size > SIZE_MAX - SIZE_ALIGN_MASK) {
     heap_set_error(HEAP_OVERFLOW, ENOMEM);
     return NULL;
@@ -277,7 +282,7 @@ void* halloc(size_t size) {
 }
 
 static void* pool_alloc(size_t size) {
-  
+
     for (int i = 0; i < NUM_POOLS; i++) {
         if (size <= _pools[i].block_size) {
             if (_pools[i].free_list == NULL) {

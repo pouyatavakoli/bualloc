@@ -3,26 +3,36 @@
 const char* heap_error_what(HeapErrorCode code) {
   switch (code) {
     case HEAP_SUCCESS:
-      return "Success";
+      return "success";
+
     case HEAP_INIT_FAILED:
-      return "Heap initialization failed";
+      return "heap initialization failed";
+
     case HEAP_ALLOC_FAILED:
-      return "Memory allocation failed";
+      return "memory allocation failed";
+
     case HEAP_FREE_FAILED:
-      return "Memory free failed";
+      return "memory free failed";
+
     case HEAP_OUT_OF_MEMORY:
-      return "Out of memory";
+      return "out of memory";
+
     case HEAP_INVALID_POINTER:
-      return "Invalid pointer";
+      return "invalid pointer";
+
     case HEAP_DOUBLE_FREE:
-      return "Double free detected";
+      return "double free detected";
+
     case HEAP_CORRUPTION_DETECTED:
-      return "Heap corruption detected";
+      return "heap corruption detected";
+
     case HEAP_INVALID_SIZE:
-      return "Invalid size requested";
+      return "invalid size requested";
+
     case HEAP_NOT_INITIALIZED:
-      return "Heap not initialized";
+      return "heap not initialized";
+
     default:
-      return "Unknown error";
+      return "unknown error";
   }
 }

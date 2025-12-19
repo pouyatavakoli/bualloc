@@ -4,58 +4,50 @@
 #include <stddef.h>
 #include <stdint.h>
 
-/* Standard magic values for heap blocks */
+/* Block magic values */
 #define HEAP_MAGIC_ALLOC 0xDEADBEEF
 #define HEAP_MAGIC_FREE 0xBAADF00D
 
-/*payload fence*/
-#define FENCE_SIZE        16
-#define FENCE_PATTERN     0xA5
+/* Payload fence */
+#define FENCE_SIZE 16
+#define FENCE_PATTERN 0xFE
 
-/* Force header alignment to worst-case primitive */
+/* Worst-case alignment */
 typedef long Align;
 
-/* Header structure */
-union header {
+typedef union header {
   struct {
-    union header* next_ptr; /* next free block if on free list (circular) */
-    size_t size;            /* block size including header + flags */
-    uint32_t magic;         /* magic number for corruption check */
-    uint32_t _pad;          /* pad to align struct to multiple of 8 */
+    union header* next_ptr; /* circular free list */
+    size_t size;            /* size incl. header + flags */
+    uint32_t magic;         /* corruption check */
+    uint32_t _pad;          /* 8-byte alignment */
   } Info;
 
-  Align x;              /* ensure proper alignment */
-  char _force_size[32]; /* force sizeof(Header) = 32 bytes (power-of-two) */
-};
+  Align x;
+  char _force_size[32]; /* force power-of-two size */
+} Header;
 
-typedef union header Header;
-
-/* Header size in bytes */
+/* Header properties */
 #define HEADER_SIZE_BYTES (sizeof(Header))
 
-/* Static assert: HEADER_SIZE_BYTES must be a power of two for low-bit flag
- * masking */
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
 _Static_assert((HEADER_SIZE_BYTES & (HEADER_SIZE_BYTES - 1)) == 0,
-               "HEADER_SIZE_BYTES must be power-of-two for flag masking");
+               "Header size must be power-of-two");
 #else
 typedef char __header_size_must_be_power_of_two
     [(HEADER_SIZE_BYTES & (HEADER_SIZE_BYTES - 1)) == 0 ? 1 : -1];
 #endif
 
-/* Mask for alignment bits: HEADER_SIZE_BYTES must be a power-of-two on
- * mainstream ABIs */
+/* Size / flag masks */
 #define SIZE_ALIGN_MASK ((size_t)(HEADER_SIZE_BYTES - 1))
-
-/* Flags stored in the low bits of Info.size (safe because sizes are multiples
- * of HEADER_SIZE_BYTES) */
 #define HEAP_FLAG_INUSE ((size_t)1)
+#define HEAP_SIZE_MASK (~SIZE_ALIGN_MASK)
 
-/* Mask to clear flags and get the pure size in bytes */
-#define HEAP_SIZE_MASK (~(SIZE_ALIGN_MASK))
+/* Helpers */
 
-/* Helper macros */
+//calculate total block size in bytes
 #define BLOCK_BYTES(p) ((p)->Info.size & HEAP_SIZE_MASK)
+
 #define IS_INUSE(p) (((p)->Info.size & HEAP_FLAG_INUSE) != 0)
 #define SET_INUSE(p) ((p)->Info.size |= HEAP_FLAG_INUSE)
 #define CLEAR_INUSE(p) ((p)->Info.size &= ~HEAP_FLAG_INUSE)

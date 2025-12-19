@@ -1,181 +1,183 @@
 # BuAli Sina Heap Allocator (bualloc)
 
-A small educational custom heap allocator in C for the Operating Systems course (Bu-Ali Sina).
-Implements a K&R-style allocator core with the following practical enhancements:
+**BuAli Sina Heap Allocator** (`bualloc`) is a small educational custom heap allocator in C for the Operating Systems course. It implements a K&R-style free-list allocator with practical enhancements including low-bit flags, page-aligned `mmap` memory, and robust error handling.
 
-* Block sizes stored in **bytes** (including header).
-* Low bits of the size field are reserved for flags (e.g. `INUSE`) — safe because every stored size is a multiple of the header size.
-* Backed by `mmap` (page-aligned mappings). We round the requested mapping up to page size and then round that value **down** to a multiple of the header size to guarantee internal arithmetic correctness.
-* Simple first-fit allocation with splitting and coalescing (circular free list).
+---
+
+## Features
+
+* Low bits of the size field are used for **flags** (e.g., `INUSE`).
+* Backed by **`mmap`** with page-aligned allocations.
+* **First-fit allocation** with splitting and coalescing.
+* Boundary **fences** for detecting buffer overflows.
+* Pointer validation and detection of **double-free** or corrupted blocks.
+* Fully testable with logging of heap state and raw memory dumps.
 
 ---
 
 ## Build & Run
 
 ```bash
-make          # build
-./bin/main    # run
+make          
+./bin/main
 ```
 
-## Tests
+---
+
+## Testing
+
+All aspects of the allocator are tested, including:
+
+* Initialization (`hinit`)
+* Allocation (`halloc`)
+* Free (`hfree`)
+* Error handling (`HEAP_*` errors and `errno`)
+* Memory fences and coalescing
+
+Run tests:
 
 ```bash
-make test     # build and run tests
+make test
 ```
 
-Run tests under valgrind for memory-safety verification:
+Run with Valgrind for memory safety:
 
 ```bash
 valgrind --leak-check=full ./bin/test_runner
 ```
 
-## Clean
+---
 
-```bash
-make clean    # remove build artifacts
+## Memory Layout
+
+Each heap block is laid out as:
+
+```
+[Header | Fence | Payload | Fence]
 ```
 
----
-
-## Design Notes (summary)
-
-This section explains the key design choices you need to understand when reading the code.
-
-### Block representation & flags (byte-based sizes)
-
-Each heap block is represented by a `Header` containing:
-
-* a pointer used for the free list (`ptr`)
-* a `size` field (type `size_t`) that stores the block size in **bytes**, including the header itself
-
-Because we enforce that every stored block size is a multiple of `sizeof(Header)`, the lowest `log2(sizeof(Header))` bits are always zero for real sizes. Those low bits are therefore safe to use as flags (for example `INUSE`). Always use the provided macros to read/write sizes and flags.
-
-Practical consequences:
-
-* Use `BLOCK_BYTES(p)` (macro) to get the numeric size for arithmetic.
-* Use `IS_INUSE/SET_INUSE/CLEAR_INUSE` macros when inspecting or changing allocation flags.
-* All pointer arithmetic in the allocator uses `char *` (byte arithmetic).
-
-### Why bytes instead of units
-
-Storing sizes in bytes simplifies interaction with `mmap` and pointer arithmetic, and makes it straightforward to use low-bit flags (as glibc does) while keeping the K&R free-list and coalescing logic. It is robust and portable on normal UNIX-like platforms.
+* **Header** → metadata (`size`, `next_ptr`, `magic`)
+* **Fence** → boundary pattern for overflow detection
+* **Payload** → user-accessible memory
 
 ---
 
-## Alignment and `mmap` policy
+## Block Size & Low-Bit Flags
 
-We need to satisfy two alignment constraints:
+* Block size is **stored in bytes**, including the header.
+* Low bits of `size` are reserved for flags because `HEADER_SIZE_BYTES` is a multiple of the size, leaving low bits always zero for real sizes.
 
-1. **Page alignment for `mmap`**: the mapping length passed to `mmap` must be a multiple of the system page size. We round the requested heap size **up** to the next page size before mapping.
+| Flag                      | Meaning                      |
+| ------------------------- | ---------------------------- |
+| `HEAP_FLAG_INUSE` (`0x1`) | Block is currently allocated |
 
-2. **Header alignment for allocator arithmetic**: the allocator relies on `sizeof(Header)` alignment (the header is a `union` with a `long` member). After page-rounding we **round down** the length to a multiple of `sizeof(Header)`. This guarantees:
-
-   * block sizes in bytes are exact multiples of `sizeof(Header)`;
-   * the low bits reserved for flags are zero for real sizes (so we can safely use them);
-   * pointer arithmetic for `next`/`split`/`coalesce` is always correct.
-
-Rounding down after page rounding wastes at most `sizeof(Header) - 1` bytes and is the simplest, safe approach.
-
----
-
-## Important header (canonical `include/heap_internal.h`)
-
+**Macros for safe flag handling:**
 
 ```c
-#ifndef HEAP_INTERNAL_H
-#define HEAP_INTERNAL_H
-
-#include <stddef.h>
-#include <stdint.h>
-
-/* force header alignment to worst-case primitive */
-typedef long Align;
-
-union header {
-  struct {
-    union header* ptr; /* next block if on free list (circular) */
-    size_t size;       /* size of this block in BYTES (including header). Low bits used for flags */
-  } s;
-  Align x; /* force alignment to at least sizeof(long) */
-};
-
-typedef union header Header;
-
-/* header size in bytes */
-#define HEADER_SIZE_BYTES (sizeof(Header))
-
-/* mask for alignment bits: HEADER_SIZE_BYTES must be a power-of-two on mainstream ABIs */
-#define SIZE_ALIGN_MASK ((size_t)(HEADER_SIZE_BYTES - 1))
-
-/* Flags stored in the low bits of s.size (safe because sizes are multiples of HEADER_SIZE_BYTES) */
-#define HEAP_FLAG_INUSE ((size_t)1)
-
-/* Mask to clear flags and get the pure size in bytes */
-#define HEAP_SIZE_MASK (~(SIZE_ALIGN_MASK))
-
-/* Helpers */
-#define BLOCK_BYTES(p) ((p)->s.size & HEAP_SIZE_MASK)
-#define IS_INUSE(p) (((p)->s.size & HEAP_FLAG_INUSE) != 0)
-#define SET_INUSE(p) ((p)->s.size |= HEAP_FLAG_INUSE)
-#define CLEAR_INUSE(p) ((p)->s.size &= ~HEAP_FLAG_INUSE)
-
-#endif /* HEAP_INTERNAL_H */
+#define BLOCK_BYTES(p) ((p)->Info.size & HEAP_SIZE_MASK) // numeric size
+#define IS_INUSE(p)   (((p)->Info.size & HEAP_FLAG_INUSE) != 0)
+#define SET_INUSE(p)  ((p)->Info.size |= HEAP_FLAG_INUSE)
+#define CLEAR_INUSE(p)((p)->Info.size &= ~HEAP_FLAG_INUSE)
 ```
 
-> Note: `HEADER_SIZE_BYTES` is typically 8 or 16 on mainstream systems (power-of-two). If you port to an exotic ABI where `sizeof(Header)` is not power-of-two, the low-bit flag trick is invalid.
+*  `BLOCK_BYTES(p)` is used for pointer arithmetic and coalescing.
+* Flags are stored in-place, no extra memory required.
 
 ---
 
-## Public API behaviour
+## Coalescing / Freeing Behavior
 
-* `HeapErrorCode hinit(size_t initial_bytes)`
-  Initialize heap with `initial_bytes` (0 means default). Returns `HEAP_SUCCESS` or `HEAP_INIT_FAILED` (and other error codes defined in `include/heap_errors.h`).
+When freeing a block (`bp`), the allocator inserts it into the **address-sorted free list** and coalesces adjacent free blocks.
 
-* `void *halloc(size_t size)`
-  Allocate a payload of `size` bytes. Returns a pointer to usable payload or `NULL` on failure. On allocation failure `halloc` sets `errno = ENOMEM`.
+### explanation
 
-* `void hfree(void *ptr)`
-  Free the block previously returned by `halloc`. Passing `NULL` is a no-op.
+* `[Header|Payload]` → a block
+* `p` → previous free block in list
+* `bp` → block being freed
+* `next` → block after `p` in free list
 
-Implementation details:
+### Case 1: No merge
 
-* The allocator uses a circular free list (K&R style) and first-fit search.
-* On allocation we attempt to split big free blocks; very small remainders are not split (we require a minimum remainder of `HEADER_SIZE_BYTES * 2` to split).
-* On free, coalescing is performed with adjacent free neighbors (address-ordered insertion makes this straightforward).
-* All arithmetic involving sizes must use the `BLOCK_BYTES` macro or `HEAP_SIZE_MASK` to avoid mixing flags and numeric sizes.
+```
+Memory: [p]      [bp]      [next]
+Free list: p -> next
+After free: p -> bp -> next
+```
+
+### Case 2: Forward merge only (`bp` + `next`)
+
+```
+Memory: [p] [bp][next]  (bp immediately before next)
+Free list before: p -> next
+After free (forward coalescing): p -> bp
+```
+
+Only `bp` and `next` merged.
+
+### Case 3: Backward merge only (`p` + `bp`)
+
+```
+Memory: [p][bp]      [next]  (p immediately before bp)
+Free list before: p -> next
+After free (backward coalescing): p -> next
+```
+
+Only `p` + `bp` merged.
+
+### Case 4: Full coalescing (`p` + `bp` + `next`)
+
+```
+Memory: [p][bp][next]  (all contiguous)
+Free list before: p -> next
+After free: p -> next->next_ptr  (p represents p+bp+next)
+```
+
+Full coalescing of both sides.
 
 ---
 
-## security
+## Public API
 
-- pointer validation before freeing
----
-
-## Error handling
-
-Error codes and messages live in `include/heap_errors.h`. The public functions return `HeapErrorCode` where appropriate (e.g., `hinit`) and use conventional C conventions elsewhere:
-
-* `halloc` returns `NULL` and sets `errno` on OOM.
-* `hfree` is `void` but must behave safely for valid pointers previously returned by `halloc`.
+| Function                                    | Description                                                                                      |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `HeapErrorCode hinit(size_t initial_bytes)` | Initialize heap with `initial_bytes` (0 for default). Returns `HEAP_SUCCESS` or error code.      |
+| `void* halloc(size_t size)`                 | Allocate `size` bytes of payload. Returns pointer or `NULL` on failure. Sets `errno` on failure. |
+| `void hfree(void* ptr)`                     | Free a previously allocated block. Safe for valid pointers; checks fences and coalesces.         |
+| `HeapErrorCode heap_last_error(void)`       | Returns the last error code for diagnostic purposes.                                             |
 
 ---
 
-## Testing & safety
+## Diagnostics
 
-Add and run unit tests (see `tests/`) for:
-
-* `hinit(0)` success.
-* 
-Run tests under `valgrind` to detect illegal reads/writes and leaks.
+* `heap_walk_dump()` → prints detailed block-by-block heap state, including in-use flags, size, fences
+* `heap_raw_dump()` → prints raw memory content for debugging
 
 ---
 
-## Coding style & references
+## Error Handling
 
-This project follows the MaJerle C coding style and borrows conceptual ideas from:
+* Custom `HeapErrorCode`s are returned by functions like `hinit` or logged via `heap_last_error()`.
+* `halloc` sets `errno` on allocation failures (`ENOMEM`, `EINVAL`, etc.).
+* `hfree` validates pointers and fences, detecting double-free or corruption.
+
+---
+
+## Security Features
+
+* Pointer validation before freeing
+* Fence checking for buffer overruns
+* Magic numbers to detect corruption
+* Safe coalescing logic
+* Double-free detection
+* Integer overflow hardening
+* Use-after-free poisoning
+
+---
+
+## References
 
 1. The C Programming Language — K&R (classic allocator concepts)
-2. glibc malloc internals — for flag usage inspiration (but not full behavior)
-   [https://sourceware.org/glibc/wiki/MallocInternals](https://sourceware.org/glibc/wiki/MallocInternals)
+2. [glibc malloc internals: for flag usage inspiration](https://sourceware.org/glibc/wiki/MallocInternals)
+3. [Memory Management with mmap](https://my.eng.utah.edu/~cs4400/malloc.pdf)
+4. [glibc malloc implementation](https://github.com/lattera/glibc/blob/master/malloc/malloc.c)
 
-See `include/heap_internal.h` above for the canonical layout and macros that the code expects.

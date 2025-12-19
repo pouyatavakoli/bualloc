@@ -1,32 +1,29 @@
-#ifndef TEST_HALLOC
-#define TEST_HALLOC
-#include <assert.h>
-#include <stddef.h>
-#include <stdio.h>
+#ifndef TEST_HALLOC_H
+#define TEST_HALLOC_H
 
 #include "heap.h"
-#include "heap_errors.h"
+#include "test_utils.h"
 
-void test_halloc(void) {
-  HeapErrorCode rc = hinit(100 * 1024);
-  assert(rc == HEAP_SUCCESS);
+static void test_halloc(void) {
+  LOG_TEST("Testing halloc allocations...");
 
-  void* p1 = halloc(1024);
-  assert(p1 != NULL);
-  heap_walk_dump();
-  printf("pointer returned to user is: %p\n", p1);
+  HeapErrorCode res = hinit(32 * 1024);
+  assert(res == HEAP_SUCCESS);
+  ASSERT_HEAP_ERROR(HEAP_SUCCESS);
 
-  void* p2 = halloc(1024);
-  assert(p2 != NULL);
-  heap_walk_dump();
-  printf("pointer returned to user is: %p\n", p2);
+  void* p1 = halloc(16);
+  ASSERT_HEAP_SUCCESS(p1);
 
-  //   void* p2 = halloc(2048);
-  //   assert(p2 != NULL);
+  void* p2 = halloc(32);
+  ASSERT_HEAP_SUCCESS(p2);
 
-  //   void* p3 = halloc(512);
-  //   assert(p3 != NULL);
+  // large allocation to trigger out-of-memory
+  void* p3 = halloc(1024UL * 1024 * 1024);
+  if (!p3) {
+    ASSERT_HEAP_ERROR(HEAP_OUT_OF_MEMORY);
+    ASSERT_ERRNO(ENOMEM);
+  }
 
-  return;
+  DUMP_HEAP_PROMPT();
 }
 #endif

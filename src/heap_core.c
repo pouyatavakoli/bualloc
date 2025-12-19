@@ -375,6 +375,26 @@ void hfree(void* ptr) {
   heap_set_error(HEAP_SUCCESS, 0);
 }
 
+static int pool_free(void* ptr) {
+  
+    for (int i = 0; i < NUM_POOLS; i++) {
+        char* start = (char*)_pools[i].pool_mem;
+        char* end   = start + _pools[i].block_size * _pools[i].total_blocks;
+
+        if ((char*)ptr >= start && (char*)ptr < end) {
+            PoolBlock* block = (PoolBlock*)ptr;
+
+            block->next = _pools[i].free_list;
+            _pools[i].free_list = block;
+
+            heap_set_error(HEAP_SUCCESS, 0);
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
 /* -------------------------------------------------------------------------- */
 /* Diagnostics                                                                */
 /* -------------------------------------------------------------------------- */

@@ -317,6 +317,10 @@ void hfree(void* ptr) {
     return;
   }
 
+  if (pool_free(ptr)) {
+    return;
+  }
+
   Header* freed_block = (Header*)((uint8_t*)ptr - FENCE_SIZE) - 1;
 
   if (!IS_INUSE(freed_block)) {
@@ -376,7 +380,7 @@ void hfree(void* ptr) {
 }
 
 static int pool_free(void* ptr) {
-  
+
     for (int i = 0; i < NUM_POOLS; i++) {
         char* start = (char*)_pools[i].pool_mem;
         char* end   = start + _pools[i].block_size * _pools[i].total_blocks;

@@ -45,6 +45,14 @@ typedef struct PoolBlock {
     size_t total_blocks; 
     PoolBlock* free_list; 
     void* pool_mem;
+
+    size_t used_blocks;
+    size_t free_blocks;
+    size_t peak_used;
+
+    size_t alloc_requests;
+    size_t free_requests;
+    size_t alloc_failures;
 } MemoryPool;
 
 static MemoryPool _pools[NUM_POOLS];
@@ -185,6 +193,14 @@ static void init_pools(void) {
             _pools[i].pool_mem = NULL;
             _pools[i].free_list = NULL;
             _pools[i].total_blocks = 0;
+
+            _pools[i].used_blocks = 0;
+            _pools[i].free_blocks = 0;
+            _pools[i].peak_used = 0;
+            _pools[i].alloc_requests = 0;
+            _pools[i].free_requests = 0;
+            _pools[i].alloc_failures = 0;
+
             continue;
         }
 
@@ -202,6 +218,13 @@ static void init_pools(void) {
             current = next;
         }
         current->next = NULL; 
+
+        _pools[i].used_blocks = 0;
+        _pools[i].free_blocks = POOL_BLOCKS_PER_SIZE;
+        _pools[i].peak_used = 0;
+        _pools[i].alloc_requests = 0;
+        _pools[i].free_requests = 0;
+        _pools[i].alloc_failures = 0;
     }
 
     heap_set_error(HEAP_SUCCESS, 0);
@@ -285,14 +308,22 @@ static void* pool_alloc(size_t size) {
 
     for (int i = 0; i < NUM_POOLS; i++) {
         if (size <= _pools[i].block_size) {
+              _pools[i].alloc_requests++;
             if (_pools[i].free_list == NULL) {
-
+                _pools[i].alloc_failures++;
                 heap_set_error(HEAP_OUT_OF_MEMORY, ENOMEM);
                 return NULL;
             }
 
             PoolBlock* block = _pools[i].free_list;
             _pools[i].free_list = block->next;
+
+            _pools[i].used_blocks++; 
+            _pools[i].free_blocks--;
+
+            if (_pools[i].used_blocks > _pools[i].peak_used) { 
+                _pools[i].peak_used = _pools[i].used_blocks; 
+            }
 
             heap_set_error(HEAP_SUCCESS, 0);
             return (void*)block;
@@ -317,7 +348,7 @@ void hfree(void* ptr) {
     return;
   }
 
-  if (pool_free(ptr)) {
+  if (pool_free(ptr)){
     return;
   }
 
@@ -391,6 +422,10 @@ static int pool_free(void* ptr) {
             block->next = _pools[i].free_list;
             _pools[i].free_list = block;
 
+            _pools[i].used_blocks--; 
+            _pools[i].free_blocks++;
+            _pools[i].free_requests++;
+            
             heap_set_error(HEAP_SUCCESS, 0);
             return 1;
         }

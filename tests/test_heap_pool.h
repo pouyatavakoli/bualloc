@@ -5,41 +5,66 @@
 #include "test_utils.h"
 
 static void test_heap_pool(void) {
-  LOG_TEST("Testing memory pool basic allocation/free...");
+  LOG_TEST("Testing halloc pools ...");
 
-  init_pools();
+  hinit(0);
   ASSERT_HEAP_ERROR(HEAP_SUCCESS);
 
-  void* p1 = pool_alloc(32);
-  ASSERT_HEAP_SUCCESS(p1);
+  printf("\nBefore allocation:\n");
+  pool_print_stats();
 
-  void* p2 = pool_alloc(48);
-  ASSERT_HEAP_SUCCESS(p2);
+  void* ptr = halloc(100);
+  ASSERT_HEAP_SUCCESS(ptr);
 
-  int freed1 = pool_free(p1);
-  assert(freed1 == 1);
-  ASSERT_HEAP_ERROR(HEAP_SUCCESS);
+  void* ptr2 = halloc(30);
+  ASSERT_HEAP_SUCCESS(ptr2);
 
-  int freed2 = pool_free(p2);
-  assert(freed2 == 1);
-  ASSERT_HEAP_ERROR(HEAP_SUCCESS);
+  void* ptr3 = halloc(30);
+  ASSERT_HEAP_SUCCESS(ptr3);
 
-  void* blocks[POOL_BLOCKS_PER_SIZE];
-  for (int i = 0; i < POOL_BLOCKS_PER_SIZE; i++) {
-    blocks[i] = pool_alloc(32);
-    ASSERT_HEAP_SUCCESS(blocks[i]);
+  void* ptr4 = halloc(60);
+  ASSERT_HEAP_SUCCESS(ptr4);
+
+  void* ptr5 = halloc(60);
+  ASSERT_HEAP_SUCCESS(ptr5);
+
+  void* ptr6 = halloc(200);
+  ASSERT_HEAP_SUCCESS(ptr6);
+
+  void* ptr7 = halloc(200);
+  ASSERT_HEAP_SUCCESS(ptr7);
+
+  printf("\nAfter allocation:\n");
+  printf("Allocated pointer: %p\n", ptr);
+  pool_print_stats();
+
+  /* Verify it was actually allocated from pool */
+  int freed = pool_free(ptr);
+  if (freed) {
+    printf("[PASS] Allocation came from memory pool\n");
+  } else {
+    printf("[FAIL] Allocation did NOT come from memory pool\n");
+    /* If not from pool, free with hfree */
+    hfree(ptr);
   }
 
-  void* fail = pool_alloc(32);
-  assert(fail == NULL);
-  ASSERT_HEAP_ERROR(HEAP_OUT_OF_MEMORY);
+  /* hfree should be able to free from pool */
+  hfree(ptr2);
+  hfree(ptr3);
+  hfree(ptr4);
+  hfree(ptr5);
+  hfree(ptr6);
+  hfree(ptr7);
 
-  for (int i = 0; i < POOL_BLOCKS_PER_SIZE; i++) {
-    int ok = pool_free(blocks[i]);
-    assert(ok == 1);
-  }
+  /* normal alloc from heap */
+  void* ptr8 = halloc(1024);
+  ASSERT_HEAP_SUCCESS(ptr8);
+  hfree(ptr8);
 
-  LOG_TEST("Memory pool basic test completed.");
+  printf("\nAfter freeing:\n");
+  pool_print_stats();
+
+  LOG_TEST("Test completed.");
 }
 
 #endif

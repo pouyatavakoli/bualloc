@@ -32,6 +32,9 @@ const char* heap_error_what(HeapErrorCode code) {
     case HEAP_NOT_INITIALIZED:
       return "heap not initialized";
 
+    case HEAP_SPRAY_ATTACK:
+      return "heap spray detected";
+
     default:
       return "unknown error";
   }

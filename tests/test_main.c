@@ -5,6 +5,7 @@
 #include "test_hfree.h"
 #include "test_hinit.h"
 #include "test_usage.h"
+#include "test_heap_spray.h"
 
 int main() {
   int choice = 0;
@@ -14,6 +15,7 @@ int main() {
   printf("2. Test halloc\n");
   printf("3. Test hfree\n");
   printf("4. Test simple usage\n");
+  printf("5. Test heap spray detection\n");
   printf("Enter test number to run: ");
   if (scanf("%d", &choice) != 1) {
     fprintf(stderr, "Invalid input.\n");
@@ -32,6 +34,9 @@ int main() {
       break;
     case 4:
       test_simple_usage();
+      break;
+    case 5:
+      test_heap_spray_detection();
       break;
     default:
       printf("Invalid choice.\n");

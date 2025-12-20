@@ -97,16 +97,46 @@ void* pool_alloc(size_t size) {
 }
 
 int pool_free(void* ptr) {
+  if (!ptr) {
+    heap_set_error(HEAP_INVALID_POINTER, EINVAL);
+    return 0;
+  }
+
   for (int i = 0; i < NUM_POOLS; i++) {
+    /* Skip pools that failed initialization */
+    if (_pools[i].pool_mem == NULL || _pools[i].total_blocks == 0) {
+      continue;
+    }
+
     char* start = (char*)_pools[i].pool_mem;
     char* end = start + _pools[i].block_size * _pools[i].total_blocks;
+    char* p = (char*)ptr;
 
-    if ((char*)ptr >= start && (char*)ptr < end) {
+    /* Check if pointer is within this pool's memory range */
+    if (p >= start && p < end) {
+      /* Verify pointer is aligned to block boundary */
+      size_t offset = p - start;
+      if (offset % _pools[i].block_size != 0) {
+        heap_set_error(HEAP_INVALID_POINTER, EINVAL);
+        return 0;
+      }
+
+      /* Double-free detection: check if block is already in free list */
+      PoolBlock* current = _pools[i].free_list;
+      while (current != NULL) {
+        if (current == (PoolBlock*)ptr) {
+          heap_set_error(HEAP_DOUBLE_FREE, EINVAL);
+          return 0;
+        }
+        current = current->next;
+      }
+
+      /* Add block to free list */
       PoolBlock* block = (PoolBlock*)ptr;
-
       block->next = _pools[i].free_list;
       _pools[i].free_list = block;
 
+      /* Update statistics */
       _pools[i].used_blocks--;
       _pools[i].free_blocks++;
       _pools[i].free_requests++;
@@ -116,5 +146,6 @@ int pool_free(void* ptr) {
     }
   }
 
+  /* Pointer doesn't belong to any pool */
   return 0;
 }

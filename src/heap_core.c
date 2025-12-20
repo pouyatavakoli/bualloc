@@ -99,6 +99,7 @@ static Header* find_insertion_point(Header* freed_block) {
 
 HeapErrorCode hinit(size_t initial_bytes) {
   if (_heap.initialized) return HEAP_SUCCESS;
+  init_pools();
 
   size_t requested = initial_bytes ? initial_bytes : DEFAULT_HEAP_SIZE;
   if (requested < MIN_HEAP_SIZE) requested = MIN_HEAP_SIZE;

@@ -48,8 +48,8 @@ void init_pools(void) {
 
     PoolBlock* head = (PoolBlock*)mem;
     _pools[i].free_list = head;
-
     PoolBlock* current = head;
+
     for (size_t j = 1; j < POOL_BLOCKS_PER_SIZE; j++) {
       PoolBlock* next = (PoolBlock*)((char*)mem + j * bsize);
       current->next = next;
@@ -89,7 +89,7 @@ void* pool_alloc(size_t size) {
       }
 
       heap_set_error(HEAP_SUCCESS, 0);
-      return (void*)block;
+      return (void*)((char*)block + sizeof(PoolBlock));
     }
   }
 
@@ -110,21 +110,23 @@ int pool_free(void* ptr) {
 
     char* start = (char*)_pools[i].pool_mem;
     char* end = start + _pools[i].block_size * _pools[i].total_blocks;
-    char* p = (char*)ptr;
 
-    /* Check if pointer is within this pool's memory range */
-    if (p >= start && p < end) {
-      /* Verify pointer is aligned to block boundary */
-      size_t offset = p - start;
+    /* Adjust pointer back to PoolBlock header for range check */
+    char* block_start = (char*)ptr - sizeof(PoolBlock);
+
+    /* Check if block header is within this pool's memory range */
+    if (block_start >= start && block_start < end) {
+      size_t offset = block_start - start;
       if (offset % _pools[i].block_size != 0) {
         heap_set_error(HEAP_INVALID_POINTER, EINVAL);
         return 0;
       }
 
       /* Double-free detection: check if block is already in free list */
+      PoolBlock* block_to_free = (PoolBlock*)block_start;
       PoolBlock* current = _pools[i].free_list;
       while (current != NULL) {
-        if (current == (PoolBlock*)ptr) {
+        if (current == block_to_free) {
           heap_set_error(HEAP_DOUBLE_FREE, EINVAL);
           return 0;
         }
@@ -132,9 +134,8 @@ int pool_free(void* ptr) {
       }
 
       /* Add block to free list */
-      PoolBlock* block = (PoolBlock*)ptr;
-      block->next = _pools[i].free_list;
-      _pools[i].free_list = block;
+      block_to_free->next = _pools[i].free_list;
+      _pools[i].free_list = block_to_free;
 
       /* Update statistics */
       _pools[i].used_blocks--;

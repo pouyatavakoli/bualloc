@@ -151,6 +151,10 @@ void* halloc(size_t size) {
     heap_set_error(HEAP_NOT_INITIALIZED, EINVAL);
     return NULL;
   }
+  if (heap_spray_check(size) == HEAP_SPRAY_DETECTED) {
+    heap_set_error(HEAP_SPRAY_ATTACK, EACCES);
+    return NULL;
+  }
 
   void* pool_ptr = pool_alloc(size);
   if (pool_ptr != NULL) {
@@ -162,10 +166,6 @@ void* halloc(size_t size) {
     return NULL;
   }
 
-  if (heap_spray_check(size) == HEAP_SPRAY_DETECTED) {
-    heap_set_error(HEAP_SPRAY_ATTACK, EACCES);
-    return NULL;
-  }
 
   size_t payload_size = (size + SIZE_ALIGN_MASK) & ~SIZE_ALIGN_MASK;
   if (payload_size > SIZE_MAX - HEADER_SIZE_BYTES - 2 * FENCE_SIZE) {
@@ -230,7 +230,7 @@ void hfree(void* ptr) {
     heap_set_error(HEAP_NOT_INITIALIZED, EINVAL);
     return;
   }
-  
+
   if (!ptr) {
     heap_set_error(HEAP_INVALID_POINTER, EINVAL);
     return;

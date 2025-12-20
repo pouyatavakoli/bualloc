@@ -42,4 +42,4 @@ static void test_heap_pool(void) {
   LOG_TEST("Memory pool basic test completed.");
 }
 
-#endif 
+#endif

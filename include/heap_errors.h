@@ -24,6 +24,9 @@ typedef enum {
   HEAP_UNKNOWN_ERROR
 } HeapErrorCode;
 
+HeapErrorCode heap_last_error(void);
+void heap_set_error(HeapErrorCode code, int err);
+
 const char* heap_error_what(HeapErrorCode code);
 
 #endif /* HEAP_ERRORS_H */

@@ -28,19 +28,11 @@ typedef struct {
 } HeapState;
 
 static HeapState _heap = {0};
-static HeapErrorCode _heap_last_error = HEAP_SUCCESS;
-
 
 /* -------------------------------------------------------------------------- */
 /* Utilities                                                                  */
 /* -------------------------------------------------------------------------- */
 
-HeapErrorCode heap_last_error(void) { return _heap_last_error; }
-
-static void heap_set_error(HeapErrorCode code, int err) {
-  _heap_last_error = code;
-  errno = err;
-}
 
 static size_t align_to_pages(size_t size) {
   long ps = sysconf(_SC_PAGESIZE);

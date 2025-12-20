@@ -12,6 +12,7 @@
 #include "heap_config.h"
 #include "heap_errors.h"
 #include "heap_internal.h"
+#include "heap_spray.h"
 
 /* -------------------------------------------------------------------------- */
 /* Heap state                                                                 */
@@ -159,6 +160,11 @@ void* halloc(size_t size) {
 
   if (size > SIZE_MAX - SIZE_ALIGN_MASK) {
     heap_set_error(HEAP_OVERFLOW, ENOMEM);
+    return NULL;
+  }
+  
+  if (heap_spray_check(size) == HEAP_SPRAY_DETECTED) {
+    heap_set_error(HEAP_SPRAY_ATTACK, EACCES);
     return NULL;
   }
 

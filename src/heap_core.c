@@ -33,7 +33,6 @@ static HeapState _heap = {0};
 /* Utilities                                                                  */
 /* -------------------------------------------------------------------------- */
 
-
 static size_t align_to_pages(size_t size) {
   long ps = sysconf(_SC_PAGESIZE);
   size_t page_size = (ps > 0) ? (size_t)ps : 4096u;
@@ -154,15 +153,15 @@ void* halloc(size_t size) {
   }
 
   void* pool_ptr = pool_alloc(size);
-  if (pool_ptr != NULL) { 
-    return pool_ptr; 
+  if (pool_ptr != NULL) {
+    return pool_ptr;
   }
 
   if (size > SIZE_MAX - SIZE_ALIGN_MASK) {
     heap_set_error(HEAP_OVERFLOW, ENOMEM);
     return NULL;
   }
-  
+
   if (heap_spray_check(size) == HEAP_SPRAY_DETECTED) {
     heap_set_error(HEAP_SPRAY_ATTACK, EACCES);
     return NULL;
@@ -231,13 +230,18 @@ void hfree(void* ptr) {
     heap_set_error(HEAP_NOT_INITIALIZED, EINVAL);
     return;
   }
-
-  if (!ptr || !is_valid_heap_ptr(ptr)) {
+  
+  if (!ptr) {
     heap_set_error(HEAP_INVALID_POINTER, EINVAL);
     return;
   }
 
-  if (pool_free(ptr)){
+  if (pool_free(ptr)) {
+    return;
+  }
+
+  if (!is_valid_heap_ptr(ptr)) {
+    heap_set_error(HEAP_INVALID_POINTER, EINVAL);
     return;
   }
 

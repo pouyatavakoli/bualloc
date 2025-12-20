@@ -6,7 +6,7 @@
 #include <sys/mman.h>
 
 #include "heap_errors.h" 
-#include "memory_pool.h"
+#include "heap_pool.h"
 
 
 static const size_t pool_sizes[NUM_POOLS] = {32, 64, 128, 256};

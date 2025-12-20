@@ -1,5 +1,5 @@
-#ifndef MEMORY_POOL_H
-#define MEMORY_POOL_H
+#ifndef HEAP_POOL_H
+#define HEAP_POOL_H
 
 #include <stddef.h>
 #include <stdint.h>
@@ -32,4 +32,4 @@ void init_pools(void);
 int pool_free(void* ptr);
 
 
-#endif /* MEMORY_POOL_H */
+#endif /* HEAP_POOL_H */

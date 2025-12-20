@@ -149,3 +149,89 @@ int pool_free(void* ptr) {
   /* Pointer doesn't belong to any pool */
   return 0;
 }
+
+void pool_print_stats(void) {
+  printf("\n=== Memory Pool Statistics ===\n");
+  printf("Total pools: %d\n", NUM_POOLS);
+  printf("Blocks per pool: %d\n", POOL_BLOCKS_PER_SIZE);
+  printf("\n");
+
+  size_t total_alloc_requests = 0;
+  size_t total_free_requests = 0;
+  size_t total_alloc_failures = 0;
+  size_t total_used_blocks = 0;
+  size_t total_free_blocks = 0;
+  size_t total_capacity = 0;
+
+  for (int i = 0; i < NUM_POOLS; i++) {
+    MemoryPool* pool = &_pools[i];
+
+    printf("Pool %d [%zu bytes per block]:\n", i, pool->block_size);
+
+    if (pool->pool_mem == NULL) {
+      printf("  Status: FAILED TO INITIALIZE\n");
+      continue;
+    }
+
+    printf("  Status: %s\n", (pool->total_blocks > 0) ? "ACTIVE" : "INACTIVE");
+    printf("  Memory region: %p - %p\n", pool->pool_mem,
+           (char*)pool->pool_mem + pool->block_size * pool->total_blocks);
+    printf("  Total blocks: %zu\n", pool->total_blocks);
+    printf("  Used blocks: %zu\n", pool->used_blocks);
+    printf("  Free blocks: %zu\n", pool->free_blocks);
+    printf("  Peak used: %zu\n", pool->peak_used);
+    printf("  Allocation requests: %zu\n", pool->alloc_requests);
+    printf("  Free requests: %zu\n", pool->free_requests);
+    printf("  Allocation failures: %zu\n", pool->alloc_failures);
+    printf("  Free list head: %p\n", (void*)pool->free_list);
+
+    /* Check free list integrity */
+    size_t free_count = 0;
+    PoolBlock* current = pool->free_list;
+    while (current != NULL) {
+      free_count++;
+      current = current->next;
+    }
+
+    if (free_count != pool->free_blocks) {
+      printf("  WARNING: Free count mismatch! List has %zu, stats show %zu\n",
+             free_count, pool->free_blocks);
+    }
+
+    /* Check for consistency */
+    if (pool->used_blocks + pool->free_blocks != pool->total_blocks) {
+      printf("  WARNING: Block count inconsistent! used+free=%zu, total=%zu\n",
+             pool->used_blocks + pool->free_blocks, pool->total_blocks);
+    }
+
+    printf("  Utilization: %.1f%%\n",
+           (pool->total_blocks > 0)
+               ? (100.0 * pool->used_blocks / pool->total_blocks)
+               : 0.0);
+
+    total_alloc_requests += pool->alloc_requests;
+    total_free_requests += pool->free_requests;
+    total_alloc_failures += pool->alloc_failures;
+    total_used_blocks += pool->used_blocks;
+    total_free_blocks += pool->free_blocks;
+    total_capacity += pool->total_blocks;
+
+    printf("\n");
+  }
+
+  printf("=== Summary ===\n");
+  printf("Total capacity: %zu blocks\n", total_capacity);
+  printf("Total used: %zu blocks\n", total_used_blocks);
+  printf("Total free: %zu blocks\n", total_free_blocks);
+  printf("Total allocation requests: %zu\n", total_alloc_requests);
+  printf("Total free requests: %zu\n", total_free_requests);
+  printf("Total allocation failures: %zu\n", total_alloc_failures);
+  printf("Overall utilization: %.1f%%\n",
+         (total_capacity > 0) ? (100.0 * total_used_blocks / total_capacity)
+                              : 0.0);
+  printf("Failure rate: %.1f%%\n",
+         (total_alloc_requests > 0)
+             ? (100.0 * total_alloc_failures / total_alloc_requests)
+             : 0.0);
+  printf("===============================\n");
+}

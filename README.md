@@ -174,6 +174,23 @@ Full coalescing of both sides.
 
 ---
 
+## Heap Spraying
+We assume heap spraying looks like this:
+
+- The program repeatedly allocates the same size
+- It does this many times
+- It does it very fast
+
+So we:
+
+- Remember the last N allocations
+- Count how many times the same size appears
+- Check if many allocations happen within a short time window
+
+If so then this is considered heap spraying attack
+
+---
+
 ## References
 
 1. The C Programming Language — K&R (classic allocator concepts)

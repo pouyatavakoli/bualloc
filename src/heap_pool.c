@@ -1,11 +1,11 @@
-#define NUM_POOLS 4
-#define POOL_BLOCKS_PER_SIZE 128
-
-#include <stdio.h> 
+#define _GNU_SOURCE
+#include <stdio.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <unistd.h>
+#include <errno.h>
 
-#include "heap_errors.h" 
+#include "heap_errors.h"
 #include "heap_pool.h"
 
 
@@ -24,9 +24,13 @@ void init_pools(void) {
 
         if (mem == MAP_FAILED) {
 
-            heap_set_error(HEAP_OUT_OF_MEMORY, ENOMEM);
-            fprintf(stderr, "pool[%d] size=%zu: %s\n",
-                    i, bsize, heap_error_what(_heap_last_error));
+            // heap_set_error(HEAP_OUT_OF_MEMORY, ENOMEM);
+            // fprintf(stderr, "pool[%d] size=%zu: %s\n",
+            //         i, bsize, heap_error_what(_heap_last_error));
+
+        fprintf(stderr, "pool[%d] size=%zu: out of memory (errno=%d: %s)\n",
+                i, bsize, errno, strerror(errno));
+
 
             _pools[i].pool_mem = NULL;
             _pools[i].free_list = NULL;
@@ -65,7 +69,7 @@ void init_pools(void) {
         _pools[i].alloc_failures = 0;
     }
 
-    heap_set_error(HEAP_SUCCESS, 0);
+    //heap_set_error(HEAP_SUCCESS, 0);
 }
 
 void* pool_alloc(size_t size) {
@@ -75,7 +79,7 @@ void* pool_alloc(size_t size) {
               _pools[i].alloc_requests++;
             if (_pools[i].free_list == NULL) {
                 _pools[i].alloc_failures++;
-                heap_set_error(HEAP_OUT_OF_MEMORY, ENOMEM);
+                //heap_set_error(HEAP_OUT_OF_MEMORY, ENOMEM);
                 return NULL;
             }
 
@@ -89,7 +93,7 @@ void* pool_alloc(size_t size) {
                 _pools[i].peak_used = _pools[i].used_blocks; 
             }
 
-            heap_set_error(HEAP_SUCCESS, 0);
+            //heap_set_error(HEAP_SUCCESS, 0);
             return (void*)block;
         }
     }
@@ -113,7 +117,7 @@ int pool_free(void* ptr) {
             _pools[i].free_blocks++;
             _pools[i].free_requests++;
 
-            heap_set_error(HEAP_SUCCESS, 0);
+            //heap_set_error(HEAP_SUCCESS, 0);
             return 1;
         }
     }

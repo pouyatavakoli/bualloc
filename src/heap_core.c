@@ -12,6 +12,7 @@
 #include "heap_config.h"
 #include "heap_errors.h"
 #include "heap_internal.h"
+#include "heap_pool.h"
 
 /* -------------------------------------------------------------------------- */
 /* Heap state                                                                 */

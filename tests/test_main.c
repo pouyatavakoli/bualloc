@@ -17,7 +17,7 @@ int main() {
   printf("4. Test simple usage\n");
   printf("5. Test memory pool\n");
   printf("Enter test number to run: ");
-  
+
   if (scanf("%d", &choice) != 1) {
     fprintf(stderr, "Invalid input.\n");
     return 1;
@@ -38,6 +38,7 @@ int main() {
       break;
     case 5:
       test_heap_pool();
+      break;
     default:
       printf("Invalid choice.\n");
       return 1;

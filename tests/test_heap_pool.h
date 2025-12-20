@@ -4,7 +4,7 @@
 #include "heap_pool.h"
 #include "test_utils.h"
 
-static void test_memory_pool_basic(void) {
+static void test_heap_pool(void) {
   LOG_TEST("Testing memory pool basic allocation/free...");
 
   init_pools();

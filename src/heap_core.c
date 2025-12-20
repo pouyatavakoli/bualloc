@@ -12,6 +12,7 @@
 #include "heap_config.h"
 #include "heap_errors.h"
 #include "heap_internal.h"
+#include "heap_pool.h"
 #include "heap_spray.h"
 
 /* -------------------------------------------------------------------------- */
@@ -28,6 +29,7 @@ typedef struct {
 
 static HeapState _heap = {0};
 static HeapErrorCode _heap_last_error = HEAP_SUCCESS;
+
 
 /* -------------------------------------------------------------------------- */
 /* Utilities                                                                  */
@@ -158,6 +160,11 @@ void* halloc(size_t size) {
     return NULL;
   }
 
+  void* pool_ptr = pool_alloc(size);
+  if (pool_ptr != NULL) { 
+    return pool_ptr; 
+  }
+
   if (size > SIZE_MAX - SIZE_ALIGN_MASK) {
     heap_set_error(HEAP_OVERFLOW, ENOMEM);
     return NULL;
@@ -234,6 +241,10 @@ void hfree(void* ptr) {
 
   if (!ptr || !is_valid_heap_ptr(ptr)) {
     heap_set_error(HEAP_INVALID_POINTER, EINVAL);
+    return;
+  }
+
+  if (pool_free(ptr)){
     return;
   }
 

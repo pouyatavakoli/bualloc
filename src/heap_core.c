@@ -33,7 +33,6 @@ static HeapState _heap = {0};
 /* Utilities                                                                  */
 /* -------------------------------------------------------------------------- */
 
-
 static size_t align_to_pages(size_t size) {
   long ps = sysconf(_SC_PAGESIZE);
   size_t page_size = (ps > 0) ? (size_t)ps : 4096u;
@@ -99,6 +98,7 @@ static Header* find_insertion_point(Header* freed_block) {
 
 HeapErrorCode hinit(size_t initial_bytes) {
   if (_heap.initialized) return HEAP_SUCCESS;
+  init_pools();
 
   size_t requested = initial_bytes ? initial_bytes : DEFAULT_HEAP_SIZE;
   if (requested < MIN_HEAP_SIZE) requested = MIN_HEAP_SIZE;
@@ -151,21 +151,21 @@ void* halloc(size_t size) {
     heap_set_error(HEAP_NOT_INITIALIZED, EINVAL);
     return NULL;
   }
+  if (heap_spray_check(size) == HEAP_SPRAY_DETECTED) {
+    heap_set_error(HEAP_SPRAY_ATTACK, EACCES);
+    return NULL;
+  }
 
   void* pool_ptr = pool_alloc(size);
-  if (pool_ptr != NULL) { 
-    return pool_ptr; 
+  if (pool_ptr != NULL) {
+    return pool_ptr;
   }
 
   if (size > SIZE_MAX - SIZE_ALIGN_MASK) {
     heap_set_error(HEAP_OVERFLOW, ENOMEM);
     return NULL;
   }
-  
-  if (heap_spray_check(size) == HEAP_SPRAY_DETECTED) {
-    heap_set_error(HEAP_SPRAY_ATTACK, EACCES);
-    return NULL;
-  }
+
 
   size_t payload_size = (size + SIZE_ALIGN_MASK) & ~SIZE_ALIGN_MASK;
   if (payload_size > SIZE_MAX - HEADER_SIZE_BYTES - 2 * FENCE_SIZE) {
@@ -231,12 +231,17 @@ void hfree(void* ptr) {
     return;
   }
 
-  if (!ptr || !is_valid_heap_ptr(ptr)) {
+  if (!ptr) {
     heap_set_error(HEAP_INVALID_POINTER, EINVAL);
     return;
   }
 
-  if (pool_free(ptr)){
+  if (pool_free(ptr)) {
+    return;
+  }
+
+  if (!is_valid_heap_ptr(ptr)) {
+    heap_set_error(HEAP_INVALID_POINTER, EINVAL);
     return;
   }
 

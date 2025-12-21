@@ -2,6 +2,7 @@
 #include "heap_pool.h"
 
 #include <errno.h>
+#include <stdalign.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/mman.h>
@@ -9,12 +10,24 @@
 
 #include "heap_errors.h"
 
+/* alignment helpers */
+#define ALIGN_UP(x, a) (((x) + ((a) - 1)) & ~((a) - 1))
+#define PAYLOAD_OFFSET ALIGN_UP(sizeof(PoolBlock), alignof(max_align_t))
+
 static const size_t pool_sizes[NUM_POOLS] = {32, 64, 128, 256};
 static MemoryPool _pools[NUM_POOLS];
 
 void init_pools(void) {
   for (int i = 0; i < NUM_POOLS; i++) {
     size_t bsize = pool_sizes[i];
+
+    /* block must fit header + aligned payload */
+    if (bsize < PAYLOAD_OFFSET) {
+      heap_set_error(HEAP_INVALID_SIZE, EINVAL);
+      _pools[i].pool_mem = NULL;
+      continue;
+    }
+
     size_t total_size = bsize * POOL_BLOCKS_PER_SIZE;
 
     void* mem = mmap(NULL, total_size, PROT_READ | PROT_WRITE,
@@ -24,21 +37,18 @@ void init_pools(void) {
       heap_set_error(HEAP_OUT_OF_MEMORY, ENOMEM);
       fprintf(stderr, "pool[%d] size=%zu: %s\n", i, bsize,
               heap_error_what(heap_last_error()));
-
       fprintf(stderr, "pool[%d] size=%zu: out of memory (errno=%d: %s)\n", i,
               bsize, errno, strerror(errno));
 
       _pools[i].pool_mem = NULL;
       _pools[i].free_list = NULL;
       _pools[i].total_blocks = 0;
-
       _pools[i].used_blocks = 0;
       _pools[i].free_blocks = 0;
       _pools[i].peak_used = 0;
       _pools[i].alloc_requests = 0;
       _pools[i].free_requests = 0;
       _pools[i].alloc_failures = 0;
-
       continue;
     }
 
@@ -48,8 +58,8 @@ void init_pools(void) {
 
     PoolBlock* head = (PoolBlock*)mem;
     _pools[i].free_list = head;
-
     PoolBlock* current = head;
+
     for (size_t j = 1; j < POOL_BLOCKS_PER_SIZE; j++) {
       PoolBlock* next = (PoolBlock*)((char*)mem + j * bsize);
       current->next = next;
@@ -70,51 +80,162 @@ void init_pools(void) {
 
 void* pool_alloc(size_t size) {
   for (int i = 0; i < NUM_POOLS; i++) {
-    if (size <= _pools[i].block_size) {
-      _pools[i].alloc_requests++;
-      if (_pools[i].free_list == NULL) {
-        _pools[i].alloc_failures++;
-        heap_set_error(HEAP_OUT_OF_MEMORY, ENOMEM);
-        return NULL;
-      }
+    MemoryPool* pool = &_pools[i];
 
-      PoolBlock* block = _pools[i].free_list;
-      _pools[i].free_list = block->next;
+    if (!pool->pool_mem) continue;
 
-      _pools[i].used_blocks++;
-      _pools[i].free_blocks--;
+    /* payload size check */
+    if (size > pool->block_size - PAYLOAD_OFFSET) continue;
 
-      if (_pools[i].used_blocks > _pools[i].peak_used) {
-        _pools[i].peak_used = _pools[i].used_blocks;
-      }
+    pool->alloc_requests++;
 
-      heap_set_error(HEAP_SUCCESS, 0);
-      return (void*)block;
+    if (pool->free_list == NULL) {
+      pool->alloc_failures++;
+      heap_set_error(HEAP_OUT_OF_MEMORY, ENOMEM);
+      return NULL;
     }
+
+    PoolBlock* block = pool->free_list;
+    pool->free_list = block->next;
+
+    pool->used_blocks++;
+    pool->free_blocks--;
+
+    if (pool->used_blocks > pool->peak_used)
+      pool->peak_used = pool->used_blocks;
+
+    heap_set_error(HEAP_SUCCESS, 0);
+
+    /* return aligned payload */
+    return (void*)((char*)block + PAYLOAD_OFFSET);
   }
 
+  heap_set_error(HEAP_OUT_OF_MEMORY, ENOMEM);
   return NULL;
 }
 
 int pool_free(void* ptr) {
-  for (int i = 0; i < NUM_POOLS; i++) {
-    char* start = (char*)_pools[i].pool_mem;
-    char* end = start + _pools[i].block_size * _pools[i].total_blocks;
-
-    if ((char*)ptr >= start && (char*)ptr < end) {
-      PoolBlock* block = (PoolBlock*)ptr;
-
-      block->next = _pools[i].free_list;
-      _pools[i].free_list = block;
-
-      _pools[i].used_blocks--;
-      _pools[i].free_blocks++;
-      _pools[i].free_requests++;
-
-      heap_set_error(HEAP_SUCCESS, 0);
-      return 1;
-    }
+  if (!ptr) {
+    heap_set_error(HEAP_INVALID_POINTER, EINVAL);
+    return 0;
   }
 
+  for (int i = 0; i < NUM_POOLS; i++) {
+    MemoryPool* pool = &_pools[i];
+
+    if (!pool->pool_mem || pool->total_blocks == 0) continue;
+
+    char* start = (char*)pool->pool_mem;
+    char* end = start + pool->block_size * pool->total_blocks;
+
+    /* recover header from payload */
+    char* block_start = (char*)ptr - PAYLOAD_OFFSET;
+
+    if (block_start < start || block_start >= end) continue;
+
+    size_t offset = (size_t)(block_start - start);
+
+    /* must land exactly on block boundary */
+    if (offset % pool->block_size != 0) {
+      heap_set_error(HEAP_INVALID_POINTER, EINVAL);
+      return 0;
+    }
+
+    PoolBlock* block = (PoolBlock*)block_start;
+
+    /* double-free detection */
+    for (PoolBlock* cur = pool->free_list; cur; cur = cur->next) {
+      if (cur == block) {
+        heap_set_error(HEAP_DOUBLE_FREE, EINVAL);
+        return 0;
+      }
+    }
+
+    block->next = pool->free_list;
+    pool->free_list = block;
+
+    pool->used_blocks--;
+    pool->free_blocks++;
+    pool->free_requests++;
+
+    heap_set_error(HEAP_SUCCESS, 0);
+    return 1;
+  }
+
+  heap_set_error(HEAP_INVALID_POINTER, EINVAL);
   return 0;
+}
+
+void pool_print_stats(void) {
+  printf("\n=== Memory Pool Statistics ===\n");
+  printf("Total pools: %d\n", NUM_POOLS);
+  printf("Blocks per pool: %d\n", POOL_BLOCKS_PER_SIZE);
+  printf("\n");
+
+  size_t total_alloc_requests = 0;
+  size_t total_free_requests = 0;
+  size_t total_alloc_failures = 0;
+  size_t total_used_blocks = 0;
+  size_t total_free_blocks = 0;
+  size_t total_capacity = 0;
+
+  for (int i = 0; i < NUM_POOLS; i++) {
+    MemoryPool* pool = &_pools[i];
+
+    printf("Pool %d [%zu bytes per block]:\n", i, pool->block_size);
+
+    if (!pool->pool_mem) {
+      printf("  Status: FAILED TO INITIALIZE\n");
+      continue;
+    }
+
+    printf("  Status: ACTIVE\n");
+    printf("  Memory region: %p - %p\n", pool->pool_mem,
+           (char*)pool->pool_mem + pool->block_size * pool->total_blocks);
+    printf("  Total blocks: %zu\n", pool->total_blocks);
+    printf("  Used blocks: %zu\n", pool->used_blocks);
+    printf("  Free blocks: %zu\n", pool->free_blocks);
+    printf("  Peak used: %zu\n", pool->peak_used);
+    printf("  Allocation requests: %zu\n", pool->alloc_requests);
+    printf("  Free requests: %zu\n", pool->free_requests);
+    printf("  Allocation failures: %zu\n", pool->alloc_failures);
+    printf("  Free list head: %p\n", (void*)pool->free_list);
+
+    size_t free_count = 0;
+    for (PoolBlock* cur = pool->free_list; cur; cur = cur->next) free_count++;
+
+    if (free_count != pool->free_blocks) {
+      printf("  WARNING: Free count mismatch! list=%zu stats=%zu\n", free_count,
+             pool->free_blocks);
+    }
+
+    if (pool->used_blocks + pool->free_blocks != pool->total_blocks) {
+      printf("  WARNING: Block count inconsistent!\n");
+    }
+
+    printf("  Utilization: %.1f%%\n",
+           100.0 * pool->used_blocks / pool->total_blocks);
+
+    total_alloc_requests += pool->alloc_requests;
+    total_free_requests += pool->free_requests;
+    total_alloc_failures += pool->alloc_failures;
+    total_used_blocks += pool->used_blocks;
+    total_free_blocks += pool->free_blocks;
+    total_capacity += pool->total_blocks;
+
+    printf("\n");
+  }
+
+  printf("=== Summary ===\n");
+  printf("Total capacity: %zu blocks\n", total_capacity);
+  printf("Total used: %zu blocks\n", total_used_blocks);
+  printf("Total free: %zu blocks\n", total_free_blocks);
+  printf("Total allocation requests: %zu\n", total_alloc_requests);
+  printf("Total free requests: %zu\n", total_free_requests);
+  printf("Total allocation failures: %zu\n", total_alloc_failures);
+  printf("Overall utilization: %.1f%%\n",
+         100.0 * total_used_blocks / total_capacity);
+  printf("Failure rate: %.1f%%\n",
+         100.0 * total_alloc_failures / total_alloc_requests);
+  printf("===============================\n");
 }

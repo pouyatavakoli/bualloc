@@ -9,30 +9,28 @@
 #define NUM_POOLS 4
 #define POOL_BLOCKS_PER_SIZE 128
 
-typedef struct PoolBlock { 
-  struct PoolBlock* next; 
-} PoolBlock; 
+typedef struct PoolBlock {
+  struct PoolBlock* next;
+} PoolBlock;
 
 typedef struct {
-    
-    size_t block_size; 
-    size_t total_blocks; 
-    PoolBlock* free_list; 
-    void* pool_mem;
+  size_t block_size;
+  size_t total_blocks;
+  PoolBlock* free_list;
+  void* pool_mem;
 
-    size_t used_blocks;
-    size_t free_blocks;
-    size_t peak_used;
+  size_t used_blocks;
+  size_t free_blocks;
+  size_t peak_used;
 
-    size_t alloc_requests;
-    size_t free_requests;
-    size_t alloc_failures;
+  size_t alloc_requests;
+  size_t free_requests;
+  size_t alloc_failures;
 } MemoryPool;
-
 
 void* pool_alloc(size_t size);
 void init_pools(void);
 int pool_free(void* ptr);
-
+void pool_print_stats(void);
 
 #endif /* HEAP_POOL_H */

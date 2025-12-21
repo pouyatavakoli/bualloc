@@ -12,7 +12,8 @@
 static const size_t pool_sizes[NUM_POOLS] = {32, 64, 128, 256};
 static MemoryPool _pools[NUM_POOLS];
 
-void init_pools(void) {
+HeapErrorCode init_pools(void) {
+
   for (int i = 0; i < NUM_POOLS; i++) {
     size_t bsize = pool_sizes[i];
     size_t total_size = bsize * POOL_BLOCKS_PER_SIZE;
@@ -24,24 +25,23 @@ void init_pools(void) {
       heap_set_error(HEAP_OUT_OF_MEMORY, ENOMEM);
       fprintf(stderr, "pool[%d] size=%zu: %s\n", i, bsize,
               heap_error_what(heap_last_error()));
+      fprintf(stderr, "pool[%d] size=%zu: out of memory (errno=%d: %s)\n",
+              i, bsize, errno, strerror(errno));
 
-      fprintf(stderr, "pool[%d] size=%zu: out of memory (errno=%d: %s)\n", i,
-              bsize, errno, strerror(errno));
-
-      _pools[i].pool_mem = NULL;
-      _pools[i].free_list = NULL;
-      _pools[i].total_blocks = 0;
-
-      _pools[i].used_blocks = 0;
-      _pools[i].free_blocks = 0;
-      _pools[i].peak_used = 0;
-      _pools[i].alloc_requests = 0;
-      _pools[i].free_requests = 0;
-      _pools[i].alloc_failures = 0;
-
-      continue;
+      
+      for (int k = 0; k < i; k++) {
+        if (_pools[k].pool_mem) {
+          munmap(_pools[k].pool_mem,
+                 _pools[k].block_size * _pools[k].total_blocks);
+          _pools[k].pool_mem = NULL;
+          _pools[k].free_list = NULL;
+          _pools[k].total_blocks = 0;
+        }
+      }
+      return HEAP_INIT_FAILED;
     }
 
+   
     _pools[i].block_size = bsize;
     _pools[i].pool_mem = mem;
     _pools[i].total_blocks = POOL_BLOCKS_PER_SIZE;
@@ -50,10 +50,13 @@ void init_pools(void) {
     _pools[i].free_list = head;
 
     PoolBlock* current = head;
+    current->in_use = 0;
+
     for (size_t j = 1; j < POOL_BLOCKS_PER_SIZE; j++) {
       PoolBlock* next = (PoolBlock*)((char*)mem + j * bsize);
       current->next = next;
       current = next;
+      current->in_use = 0;
     }
     current->next = NULL;
 
@@ -66,7 +69,10 @@ void init_pools(void) {
   }
 
   heap_set_error(HEAP_SUCCESS, 0);
+  return HEAP_SUCCESS;
 }
+
+
 
 void* pool_alloc(size_t size) {
   for (int i = 0; i < NUM_POOLS; i++) {
@@ -80,6 +86,7 @@ void* pool_alloc(size_t size) {
 
       PoolBlock* block = _pools[i].free_list;
       _pools[i].free_list = block->next;
+      block->in_use = 1;
 
       _pools[i].used_blocks++;
       _pools[i].free_blocks--;
@@ -97,13 +104,34 @@ void* pool_alloc(size_t size) {
 }
 
 int pool_free(void* ptr) {
+  if (!ptr) {
+    heap_set_error(HEAP_INVALID_POINTER, EINVAL);
+    return 0;
+  }
+
   for (int i = 0; i < NUM_POOLS; i++) {
     char* start = (char*)_pools[i].pool_mem;
     char* end = start + _pools[i].block_size * _pools[i].total_blocks;
 
     if ((char*)ptr >= start && (char*)ptr < end) {
+      size_t offset = (char*)ptr - start;
+
+      
+      if (offset % _pools[i].block_size != 0) {
+        heap_set_error(HEAP_ALIGNMENT_ERROR, EFAULT);
+        return 0;
+      }
+
       PoolBlock* block = (PoolBlock*)ptr;
 
+      /* detect double free */
+      if (!block->in_use) {
+        heap_set_error(HEAP_DOUBLE_FREE, EINVAL);
+        return 0;
+      }
+
+      block->in_use = 0;
+     
       block->next = _pools[i].free_list;
       _pools[i].free_list = block;
 
@@ -116,5 +144,6 @@ int pool_free(void* ptr) {
     }
   }
 
+  heap_set_error(HEAP_INVALID_POINTER, EINVAL);
   return 0;
 }

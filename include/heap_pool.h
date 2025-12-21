@@ -10,7 +10,8 @@
 #define POOL_BLOCKS_PER_SIZE 128
 
 typedef struct PoolBlock { 
-  struct PoolBlock* next; 
+  struct PoolBlock* next;
+  int in_use; 
 } PoolBlock; 
 
 typedef struct {
@@ -31,7 +32,7 @@ typedef struct {
 
 
 void* pool_alloc(size_t size);
-void init_pools(void);
+HeapErrorCode init_pools(void);
 int pool_free(void* ptr);
 
 

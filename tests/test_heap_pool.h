@@ -24,6 +24,23 @@ static void test_heap_pool(void) {
   assert(freed2 == 1);
   ASSERT_HEAP_ERROR(HEAP_SUCCESS);
 
+  int double_free = pool_free(p1);
+  assert(double_free == 0);
+  ASSERT_HEAP_ERROR(HEAP_DOUBLE_FREE);
+
+  int null_free = pool_free(NULL);
+  assert(null_free == 0);
+  ASSERT_HEAP_ERROR(HEAP_INVALID_POINTER);
+
+  int invalid_free = pool_free((void*)0x12345);
+  assert(invalid_free == 0);
+  ASSERT_HEAP_ERROR(HEAP_INVALID_POINTER);
+
+  void* misaligned = (char*)p2 + 1;
+  int misaligned_free = pool_free(misaligned);
+  assert(misaligned_free == 0);
+  ASSERT_HEAP_ERROR(HEAP_ALIGNMENT_ERROR);
+
   void* blocks[POOL_BLOCKS_PER_SIZE];
   for (int i = 0; i < POOL_BLOCKS_PER_SIZE; i++) {
     blocks[i] = pool_alloc(32);
@@ -39,7 +56,7 @@ static void test_heap_pool(void) {
     assert(ok == 1);
   }
 
-  LOG_TEST("Memory pool basic test completed.");
+  LOG_TEST("Memory pool extended test completed.");
 }
 
 #endif

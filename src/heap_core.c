@@ -139,6 +139,14 @@ HeapErrorCode hinit(size_t initial_bytes) {
   _heap.base.Info.next_ptr = first;
 
   heap_set_error(HEAP_SUCCESS, 0);
+  
+   if (init_pools() != HEAP_SUCCESS) {
+      munmap(mem, heap_size);
+      _heap.initialized = 0;
+      return HEAP_INIT_FAILED; 
+  }
+
+
   return HEAP_SUCCESS;
 }
 

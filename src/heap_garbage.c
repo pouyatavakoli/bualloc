@@ -54,3 +54,40 @@ int is_possible_heap_ptr(void* ptr) {
     if (p & SIZE_ALIGN_MASK) return 0;
     return 1;
 }
+
+static void mark_block(Header* h) {
+    if (!h) return;
+    if (IS_MARKED(h)) return;
+
+    SET_MARK(h);
+}
+
+static void mark_from_ptr(void* ptr) {
+    if (!is_possible_heap_ptr(ptr))
+        return;
+
+    Header* h = heap_block_from_payload(ptr);
+    if (!h) return;
+
+    mark_block(h);
+}
+Header* heap_block_from_payload(void* ptr) {
+    if (!ptr) return NULL;
+    return (Header*)((uint8_t*)ptr - FENCE_SIZE) - 1;
+}
+
+void gc_mark_stack(void) {
+    if (!gc_initialized)
+        gc_init();
+
+    uintptr_t stack_top;
+    stack_top = (uintptr_t)&stack_top;
+
+    uintptr_t* p = (uintptr_t*)stack_top;
+    uintptr_t* bottom = (uintptr_t*)stack_bottom;
+
+    while (p < bottom) {
+        mark_from_ptr((void*)(*p));
+        p++;
+    }
+}

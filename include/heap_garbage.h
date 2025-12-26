@@ -8,6 +8,8 @@
 void gc_init(void);
 int gc_is_initialized(void);
 int is_possible_heap_ptr(void* ptr);
+void gc_mark_stack(void);
+Header* heap_block_from_payload(void* ptr);
 
 
 #endif /* HEAP_GARBAGE_H */

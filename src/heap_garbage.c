@@ -91,3 +91,32 @@ void gc_mark_stack(void) {
         p++;
     }
 }
+void gc_sweep(void) {
+    if (!gc_initialized) return;
+
+    Header* h = heap_first_block();
+
+    while (h) {
+        Header* next = heap_next_block(h); 
+
+        if (IS_INUSE(h)) {
+            if (!IS_MARKED(h)) {
+                void* payload = (void*)((char*)h + HEADER_SIZE_BYTES + FENCE_SIZE);
+                hfree(payload);
+            } else {
+                CLEAR_MARK(h);
+            }
+        }
+
+        h = next;
+    }
+}
+void gc_collect(void) {
+    if (!gc_initialized)
+        gc_init();
+
+    gc_mark_stack();
+    gc_sweep();
+}
+
+

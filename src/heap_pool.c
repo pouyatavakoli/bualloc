@@ -7,6 +7,8 @@
 #include <string.h>
 #include <sys/mman.h>
 #include <unistd.h>
+#include <stdlib.h>   
+
 
 #include "heap_errors.h"
 
@@ -83,8 +85,6 @@ void* pool_alloc(size_t size) {
     MemoryPool* pool = &_pools[i];
 
     if (!pool->pool_mem) continue;
-
-    /* payload size check */
     if (size > pool->block_size - PAYLOAD_OFFSET) continue;
 
     pool->alloc_requests++;
@@ -92,7 +92,7 @@ void* pool_alloc(size_t size) {
     if (pool->free_list == NULL) {
       pool->alloc_failures++;
       heap_set_error(HEAP_OUT_OF_MEMORY, ENOMEM);
-      return NULL;
+      return malloc(size);
     }
 
     PoolBlock* block = pool->free_list;
@@ -105,13 +105,10 @@ void* pool_alloc(size_t size) {
       pool->peak_used = pool->used_blocks;
 
     heap_set_error(HEAP_SUCCESS, 0);
-
-    /* return aligned payload */
     return (void*)((char*)block + PAYLOAD_OFFSET);
   }
 
-  heap_set_error(HEAP_OUT_OF_MEMORY, ENOMEM);
-  return NULL;
+  return malloc(size);
 }
 
 int pool_free(void* ptr) {
@@ -127,15 +124,11 @@ int pool_free(void* ptr) {
 
     char* start = (char*)pool->pool_mem;
     char* end = start + pool->block_size * pool->total_blocks;
-
-    /* recover header from payload */
     char* block_start = (char*)ptr - PAYLOAD_OFFSET;
 
     if (block_start < start || block_start >= end) continue;
 
     size_t offset = (size_t)(block_start - start);
-
-    /* must land exactly on block boundary */
     if (offset % pool->block_size != 0) {
       heap_set_error(HEAP_INVALID_POINTER, EINVAL);
       return 0;
@@ -143,7 +136,7 @@ int pool_free(void* ptr) {
 
     PoolBlock* block = (PoolBlock*)block_start;
 
-    /* double-free detection */
+    // double-free detection
     for (PoolBlock* cur = pool->free_list; cur; cur = cur->next) {
       if (cur == block) {
         heap_set_error(HEAP_DOUBLE_FREE, EINVAL);
@@ -162,8 +155,9 @@ int pool_free(void* ptr) {
     return 1;
   }
 
-  heap_set_error(HEAP_INVALID_POINTER, EINVAL);
-  return 0;
+  free(ptr);
+  heap_set_error(HEAP_SUCCESS, 0);
+  return 1;
 }
 
 void pool_print_stats(void) {

@@ -14,7 +14,7 @@
 #define ALIGN_UP(x, a) (((x) + ((a) - 1)) & ~((a) - 1))
 #define PAYLOAD_OFFSET ALIGN_UP(sizeof(PoolBlock), alignof(max_align_t))
 
-static const size_t pool_sizes[NUM_POOLS] = {32, 64, 128, 256};
+static const size_t pool_sizes[NUM_POOLS] = {64, 128, 256, 1024};
 static MemoryPool _pools[NUM_POOLS];
 
 void init_pools(void) {
@@ -91,8 +91,7 @@ void* pool_alloc(size_t size) {
 
     if (pool->free_list == NULL) {
       pool->alloc_failures++;
-      heap_set_error(HEAP_OUT_OF_MEMORY, ENOMEM);
-      return NULL;
+      continue;
     }
 
     PoolBlock* block = pool->free_list;
@@ -110,7 +109,6 @@ void* pool_alloc(size_t size) {
     return (void*)((char*)block + PAYLOAD_OFFSET);
   }
 
-  heap_set_error(HEAP_OUT_OF_MEMORY, ENOMEM);
   return NULL;
 }
 

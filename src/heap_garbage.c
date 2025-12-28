@@ -86,9 +86,16 @@ void gc_mark_stack(void) {
     uintptr_t* p = (uintptr_t*)stack_top;
     uintptr_t* bottom = (uintptr_t*)stack_bottom;
 
+    if (p < bottom) {
     while (p < bottom) {
         mark_from_ptr((void*)(*p));
         p++;
+    }
+    } else {
+    while (p > bottom) {
+        mark_from_ptr((void*)(*p));
+        p--;
+    }
     }
 }
 void gc_sweep(void) {

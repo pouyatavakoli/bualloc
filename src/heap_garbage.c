@@ -62,15 +62,16 @@ static void mark_block(Header* h) {
     SET_MARK(h);
 }
 
-static void mark_from_ptr(void* ptr) {
-    if (!is_possible_heap_ptr(ptr))
-        return;
+// static void mark_from_ptr(void* ptr) {
+//     if (!is_possible_heap_ptr(ptr))
+//         return;
 
-    Header* h = heap_block_from_payload(ptr);
-    if (!h) return;
+//     Header* h = heap_block_from_payload(ptr);
+//     if (!h) return;
 
-    mark_block(h);
-}
+//     mark_block(h);
+// }
+
 Header* heap_block_from_payload(void* ptr) {
     if (!ptr) return NULL;
     return (Header*)((uint8_t*)ptr - FENCE_SIZE) - 1;
@@ -80,24 +81,27 @@ void gc_mark_stack(void) {
     if (!gc_initialized)
         gc_init();
 
-    uintptr_t stack_top;
-    stack_top = (uintptr_t)&stack_top;
+    uintptr_t* stack_top = (uintptr_t*)&stack_top;
+    uintptr_t* stack_bottom_ptr = (uintptr_t*)stack_bottom;
 
-    uintptr_t* p = (uintptr_t*)stack_top;
-    uintptr_t* bottom = (uintptr_t*)stack_bottom;
+    for (uintptr_t* p = stack_top; p >= stack_bottom_ptr; p--) {
+        void* candidate = (void*)(*p);
 
-    if (p < bottom) {
-    while (p < bottom) {
-        mark_from_ptr((void*)(*p));
-        p++;
-    }
-    } else {
-    while (p > bottom) {
-        mark_from_ptr((void*)(*p));
-        p--;
-    }
+        // must be non-NULL and properly aligned
+        if (!candidate) continue;
+        if ((uintptr_t)candidate & SIZE_ALIGN_MASK) continue;
+
+        Header* h = heap_block_from_payload(candidate);
+
+        // verify h is actually in the heap
+        if ((uintptr_t)h < (uintptr_t)heap_start_addr() ||
+            (uintptr_t)h >= (uintptr_t)heap_start_addr() + heap_total_size())
+            continue;
+
+        mark_block(h);
     }
 }
+
 void gc_sweep(void) {
     if (!gc_initialized) return;
 
@@ -119,9 +123,11 @@ void gc_sweep(void) {
     }
 }
 void gc_collect(void) {
-    if (!gc_initialized)
+    if (!gc_initialized){
         gc_init();
+    }
 
+    printf("gc func");
     gc_mark_stack();
     gc_sweep();
 }

@@ -351,3 +351,24 @@ void heap_raw_dump(void) {
   }
   printf("\n");
 }
+
+void* heap_start_addr(void) {
+    return _heap.start_addr;
+}
+
+size_t heap_total_size(void) {
+    return _heap.heap_size;
+}
+
+Header* heap_first_block(void) {
+    if (!_heap.initialized) return NULL;
+    return (Header*)_heap.start_addr;
+}
+
+Header* heap_next_block(Header* current) {
+    if (!current) return NULL;
+    size_t size = BLOCK_BYTES(current);
+    char* next = (char*)current + size;
+    char* end = (char*)_heap.start_addr + _heap.heap_size;
+    return (next < end) ? (Header*)next : NULL;
+}

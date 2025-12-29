@@ -7,7 +7,7 @@
 #include "heap_errors.h"
 
 #define NUM_POOLS 4
-#define POOL_BLOCKS_PER_SIZE 128
+#define POOL_BLOCKS_PER_SIZE 1
 
 typedef struct PoolBlock {
   struct PoolBlock* next;

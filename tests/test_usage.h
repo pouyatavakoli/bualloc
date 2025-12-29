@@ -27,7 +27,7 @@ static void test_simple_usage(void) {
   ASSERT_HEAP_ERROR(HEAP_SUCCESS);
 
   // Fence corruption test
-  char* corrupt = (char*)halloc(16);
+  char* corrupt = (char*)halloc(1600);
   corrupt[-1] ^= 0xFF;  // corrupt pre-fence
   hfree(corrupt);
   ASSERT_HEAP_ERROR(HEAP_BOUNDARY_ERROR);

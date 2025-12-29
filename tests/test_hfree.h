@@ -7,14 +7,14 @@
 static void test_hfree(void) {
   LOG_TEST("Testing hfree...");
 
-  HeapErrorCode res = hinit(32 * 4);
+  HeapErrorCode res = hinit(10*1024);
   assert(res == HEAP_SUCCESS);
   ASSERT_HEAP_ERROR(HEAP_SUCCESS);
 
-  void* p1 = halloc(16);
-  void* p2 = halloc(16);
-  void* p3 = halloc(16);
-  void* p4 = halloc(16);
+  void* p1 = halloc(1600);
+  void* p2 = halloc(1600);
+  void* p3 = halloc(1600);
+  void* p4 = halloc(1600);
   DUMP_HEAP_PROMPT();
   
   hfree(p2);

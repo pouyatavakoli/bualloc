@@ -73,6 +73,44 @@ static void test_heap_pool(void) {
   pool_print_stats();
 
   LOG_TEST("Test completed.");
+
+
+  LOG_TEST("\n\n-------------------------------------------------\n\n");
+  LOG_TEST("Test pool free: \n");
+
+  void* p1 = halloc(50);
+  ASSERT_HEAP_SUCCESS(p1);
+
+  int freed1 = pool_free(p1);
+  if (freed1) {
+    printf("[PASS] Block returned to pool\n");
+  } else {
+    printf("[FAIL] Block did NOT return to pool\n");
+    hfree(p1);
+  }
+
+  void* p2 = halloc(50);
+  ASSERT_HEAP_SUCCESS(p2);
+
+  if (p2 == p1) {
+    printf("[PASS] Same block reused from pool\n");
+  } else {
+    printf("[FAIL] Different block, not reused\n");
+  }
+
+  void* big = halloc(2048);
+  ASSERT_HEAP_SUCCESS(big);
+
+  int freed_big = pool_free(big);
+  if (freed_big) {
+    printf("[FAIL] Large allocation incorrectly freed to pool\n");
+  } else {
+    printf("[PASS] Large allocation not from pool (must use hfree)\n");
+    hfree(big);
+  }
+
+  LOG_TEST("\n-------------------------------------------------");
+  
 }
 
 #endif

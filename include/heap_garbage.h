@@ -1,16 +1,19 @@
 #ifndef HEAP_GARBAGE_H
 #define HEAP_GARBAGE_H
 
-#include <stddef.h>
-#include <stdint.h>
+#include "heap.h"
 #include "heap_internal.h"
 
+/* Initialize the garbage collector (currently a no-op) */
 void gc_init(void);
-int gc_is_initialized(void);
-int is_possible_heap_ptr(void* ptr);
-void gc_mark_stack(void);
-Header* heap_block_from_payload(void* ptr);
-void gc_sweep(void);
+
+/* Register a pointer-to-pointer as a root (e.g., &my_ptr) */
+void gc_add_root(void** root);
+
+/* Remove a previously registered root */
+void gc_remove_root(void** root);
+
+/* Run a full mark-and-sweep collection cycle */
 void gc_collect(void);
 
 #endif /* HEAP_GARBAGE_H */

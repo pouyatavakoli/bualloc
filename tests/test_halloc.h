@@ -17,7 +17,7 @@ static void test_halloc(void) {
   void* p2 = halloc(2400);
   ASSERT_HEAP_SUCCESS(p2);
 
-  // large allocation to trigger out-of-memory
+  /* large allocation to trigger out-of-memory */
   void* p3 = halloc(1024UL * 1024 * 1024);
   if (!p3) {
     ASSERT_HEAP_ERROR(HEAP_OUT_OF_MEMORY);

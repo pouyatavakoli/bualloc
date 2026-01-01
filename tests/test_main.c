@@ -9,9 +9,11 @@
 #include "test_heap_spray.h"
 #include "test_gc.h"
 
+/* Test runner entry point */
 int main() {
   int choice = 0;
 
+  /* Print test menu */
   printf("Heap Allocator Test Menu:\n");
   printf("1. Test hinit\n");
   printf("2. Test halloc\n");
@@ -27,6 +29,7 @@ int main() {
     return 1;
   }
 
+  /* Dispatch selected test */
   switch (choice) {
     case 1:
       test_hinit();

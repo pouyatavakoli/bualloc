@@ -9,11 +9,14 @@
 #include "heap.h"
 #include "heap_errors.h"
 
+/* Log test message */
 #define LOG_TEST(msg)           \
   do {                          \
     printf("[TEST] %s\n", msg); \
   } while (0)
 
+
+/* Assert that heap allocation succeeded */
 #define ASSERT_HEAP_SUCCESS(ptr)                                              \
   do {                                                                        \
     if (!(ptr)) {                                                             \
@@ -28,6 +31,8 @@
     }                                                                         \
   } while (0)
 
+
+/* Assert that the last heap error matches expected code */
 #define ASSERT_HEAP_ERROR(code)                                              \
   do {                                                                       \
     if (heap_last_error() != (code)) {                                       \
@@ -43,6 +48,7 @@
     }                                                                        \
   } while (0)
 
+/* Assert that errno matches expected value */
 #define ASSERT_ERRNO(err)                                                    \
   do {                                                                       \
     if (errno != (err)) {                                                    \
@@ -54,6 +60,7 @@
     }                                                                        \
   } while (0)
 
+/* Prompt user to dump heap */
 #define DUMP_HEAP_PROMPT()                              \
   do {                                                  \
     int choice = 0;                                     \

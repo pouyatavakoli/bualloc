@@ -44,12 +44,11 @@ typedef char __header_size_must_be_power_of_two
 #define HEAP_SIZE_MASK (~SIZE_ALIGN_MASK)
 
 /* GC mark bit (use highest available bit) */
-// #define HEAP_FLAG_MARK ((size_t)1 << (sizeof(size_t)*8 - 1))
 #define HEAP_FLAG_MARK ((size_t)0x2)
 
 /* Helpers */
 
-//calculate total block size in bytes
+/* Calculate total block size in bytes */
 #define BLOCK_BYTES(p) ((p)->Info.size & HEAP_SIZE_MASK)
 
 #define IS_INUSE(p) (((p)->Info.size & HEAP_FLAG_INUSE) != 0)

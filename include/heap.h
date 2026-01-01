@@ -6,11 +6,10 @@
 #include "heap_errors.h"
 #include "heap_internal.h" 
 
-HeapErrorCode hinit(size_t initial_bytes);
-
-/* Allocation */
+/* Allocation interface */
 void* halloc(size_t size);
 void hfree(void* ptr);
+HeapErrorCode hinit(size_t initial_bytes);
 
 /* Diagnostics */
 HeapErrorCode heap_last_error(void);

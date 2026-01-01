@@ -1,8 +1,7 @@
-#include "heap_garbage.h"
-
 #include <stdint.h>
 #include <string.h>
 
+#include "heap_garbage.h"
 #include "heap.h"
 #include "heap_internal.h"
 

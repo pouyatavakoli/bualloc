@@ -1,5 +1,3 @@
-#define _GNU_SOURCE
-
 #include <errno.h>
 #include <limits.h>
 #include <stdint.h>
@@ -14,6 +12,9 @@
 #include "heap_internal.h"
 #include "heap_pool.h"
 #include "heap_spray.h"
+
+#define _GNU_SOURCE
+
 
 /* -------------------------------------------------------------------------- */
 /* Heap state                                                                 */
@@ -33,6 +34,7 @@ static HeapState _heap = {0};
 /* Utilities                                                                  */
 /* -------------------------------------------------------------------------- */
 
+/* Align given size up to nearest page size */
 static size_t align_to_pages(size_t size) {
   long ps = sysconf(_SC_PAGESIZE);
   size_t page_size = (ps > 0) ? (size_t)ps : 4096u;
@@ -41,14 +43,17 @@ static size_t align_to_pages(size_t size) {
   return ((size + page_size - 1) / page_size) * page_size;
 }
 
+/* Set fence bytes to detect buffer overruns */
 static void set_fence(uint8_t* ptr) { memset(ptr, FENCE_PATTERN, FENCE_SIZE); }
 
+/* Check if fence bytes are intact */
 static int check_fence(const uint8_t* ptr) {
   for (size_t i = 0; i < FENCE_SIZE; i++)
     if (ptr[i] != FENCE_PATTERN) return 0;
   return 1;
 }
 
+/* Validate if a pointer belongs to heap and is properly aligned */
 static int is_valid_heap_ptr(void* ptr) {
   if (!_heap.initialized || !ptr) return 0;
 
@@ -67,6 +72,7 @@ static int is_valid_heap_ptr(void* ptr) {
   return 1;
 }
 
+/* Find previous header in free list where a freed block should be inserted */
 static Header* find_insertion_point(Header* freed_block) {
   Header* prev = _heap.freep;
 
@@ -80,10 +86,6 @@ static Header* find_insertion_point(Header* freed_block) {
     } else if (prev < freed_block && freed_block < next) {
       return prev;
     }
-    /* wrapped around the circular list
-     *   - freed_block > prev: should be after the last block
-     *   - freed_block < next: should be before the first block
-     */
     else if (prev >= next && (freed_block > prev || freed_block < next)) {
       return prev;
     }
@@ -275,7 +277,7 @@ void hfree(void* ptr) {
   CLEAR_INUSE(freed_block);
   freed_block->Info.magic = HEAP_MAGIC_FREE;
 
-  /* --- Coalescing Logic --- */
+  /* Coalescing Logic */
 
   Header* prev = find_insertion_point(freed_block);
   Header* next = prev->Info.next_ptr;
@@ -337,6 +339,7 @@ void heap_walk_dump(void) {
   }
 }
 
+/* Print raw heap bytes */
 void heap_raw_dump(void) {
   if (!_heap.initialized) return;
 

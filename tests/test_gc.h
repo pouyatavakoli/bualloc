@@ -11,7 +11,7 @@
 static void test_gc_short_free_and_poison(void) {
   LOG_TEST("Starting short GC test: free & poison unreachable objects");
 
-  // Initialize heap
+  /* Initialize heap */ 
   HeapErrorCode res = hinit(10 * 1024);
   if (res != HEAP_SUCCESS) {
     printf("[ERROR] Heap initialization failed: %d\n", res);
@@ -19,7 +19,7 @@ static void test_gc_short_free_and_poison(void) {
   }
   ASSERT_HEAP_ERROR(HEAP_SUCCESS);
 
-  // Allocate objects
+  /* Allocate objects */
   void* objKeep1 = halloc(2000);
   void* objKeep2 = halloc(2000);
   void* objDrop = halloc(2000);
@@ -29,7 +29,7 @@ static void test_gc_short_free_and_poison(void) {
     return;
   }
 
-  // Fill memory with pattern to track it
+  /* Fill memory with pattern to track it */
   memset(objKeep1, 0xAA, 2000);
   memset(objKeep2, 0xBB, 2000);
   memset(objDrop, 0xCC, 2000);
@@ -38,22 +38,22 @@ static void test_gc_short_free_and_poison(void) {
   printf("       objKeep1: %p, objKeep2: %p, objDrop: %p (untracked root)\n",
          objKeep1, objKeep2, objDrop);
 
-  // Add roots only for objects we want to keep
+  /* Add roots only for objects we want to keep */
   gc_add_root(&objKeep1);
   gc_add_root(&objKeep2);
 
-  DUMP_HEAP_PROMPT();  // Should show 3 allocated blocks
+  DUMP_HEAP_PROMPT();  /* Should show 3 allocated blocks */
 
-  // Run GC
+  /* Run GC */
   printf(
       "[INFO] Running gc_collect() → expecting objDrop to be freed and "
       "poisoned\n");
   gc_collect();
 
-  DUMP_HEAP_PROMPT();  // Should show 2 live blocks; the freed block's payload
-                       // poisoned
+  DUMP_HEAP_PROMPT();  /* Should show 2 live blocks */
+                      
 
-  // Optionally verify poison manually
+  /* Optionally verify poison manually */ 
   unsigned char* drop_bytes = (unsigned char*)objDrop;
   int poisoned = 1;
   for (size_t i = 0; i < 640; i++) {

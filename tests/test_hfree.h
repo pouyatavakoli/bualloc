@@ -25,22 +25,22 @@ static void test_hfree(void) {
   ASSERT_HEAP_ERROR(HEAP_SUCCESS);
 
   printf("adjacent blocks freed, view dump to check coalescing\n");
-  //view dump to see coalescing
+  
+  /* view dump to see coalescing */
   DUMP_HEAP_PROMPT();
 
-  // double free
+  /* double free */
   hfree(p1);
   ASSERT_HEAP_ERROR(HEAP_DOUBLE_FREE);
   ASSERT_ERRNO(EINVAL);
 
-  // invalid pointer
+  /* invalid pointer */
   int dummy;
   hfree(&dummy);
   ASSERT_HEAP_ERROR(HEAP_INVALID_POINTER);
   ASSERT_ERRNO(EINVAL);
 
   hfree(p4);
-
 
   DUMP_HEAP_PROMPT();
 }

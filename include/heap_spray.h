@@ -3,10 +3,14 @@
 
 #include <stddef.h>
 
-#define HEAP_SPRAY_OK 0
-#define HEAP_SPRAY_DETECTED 1
+/* heap spray detection status */
+#define HEAP_SPRAY_OK        0
+#define HEAP_SPRAY_DETECTED  1
 
+/* initialize heap spray detection */
 void heap_spray_init(void);
+
+/* check allocation pattern for heap spray */
 int heap_spray_check(size_t size);
 
-#endif
+#endif /* HEAP_SPRAY_H */

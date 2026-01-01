@@ -17,17 +17,20 @@ typedef struct {
 static allocation_size_time events[MAX_EVENTS];
 static int event_count;
 
+/* Get current monotonic time in nanoseconds */
 static long long getCurrentTime(void) {
   struct timespec ts;
   clock_gettime(CLOCK_MONOTONIC, &ts);
   return (long long)ts.tv_sec * 1000000000LL + ts.tv_nsec;
 }
 
+/* Initialize heap spray detector */
 void heap_spray_init(void) {
   memset(events, 0, sizeof(events));
   event_count = 0;
 }
 
+/* Check allocation pattern for heap spray */
 int heap_spray_check(size_t size) {
   long long t = getCurrentTime();
 

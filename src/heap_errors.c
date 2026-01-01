@@ -1,8 +1,10 @@
+#include <errno.h>
+
 #include "heap_errors.h"
 
-#include <errno.h>
 static HeapErrorCode _heap_last_error = HEAP_SUCCESS;
 
+/* Convert error code to string */
 const char* heap_error_what(HeapErrorCode code) {
   switch (code) {
     case HEAP_SUCCESS:
@@ -43,7 +45,12 @@ const char* heap_error_what(HeapErrorCode code) {
   }
 }
 
-HeapErrorCode heap_last_error(void) { return _heap_last_error; }
+/* Get last error */
+HeapErrorCode heap_last_error(void) {
+  return _heap_last_error;
+}
+
+/* Set heap error and errno */
 void heap_set_error(HeapErrorCode code, int err) {
   _heap_last_error = code;
   errno = err;

@@ -1,3 +1,5 @@
+#define _GNU_SOURCE
+
 #include <errno.h>
 #include <stdalign.h>
 #include <stdio.h>
@@ -8,7 +10,6 @@
 #include "heap_pool.h"
 #include "heap_errors.h"
 
-#define _GNU_SOURCE
 
 
 /* Alignment helpers */

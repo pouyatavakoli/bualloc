@@ -1,3 +1,5 @@
+#define _GNU_SOURCE
+
 #include <errno.h>
 #include <limits.h>
 #include <stdint.h>
@@ -13,7 +15,6 @@
 #include "heap_pool.h"
 #include "heap_spray.h"
 
-#define _GNU_SOURCE
 
 
 /* -------------------------------------------------------------------------- */

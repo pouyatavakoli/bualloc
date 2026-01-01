@@ -7,15 +7,15 @@
 static void test_simple_usage(void) {
   LOG_TEST("Testing simple heap usage as malloc/free...");
 
-  if (hinit(64 * 1024) != HEAP_SUCCESS) {
+  if (hinit(10 * 1024) != HEAP_SUCCESS) {
     ASSERT_HEAP_ERROR(HEAP_SUCCESS);
     return;
   }
 
-  int* arr = (int*)halloc(10 * sizeof(int));
+  int* arr = (int*)halloc(500 * sizeof(int));
   ASSERT_HEAP_SUCCESS(arr);
 
-  for (int i = 0; i < 10; i++) arr[i] = i * i;
+  for (int i = 0; i < 10; i++) arr[i] = i;
 
   printf("Array contents: ");
   for (int i = 0; i < 10; i++) printf("%d ", arr[i]);
@@ -25,6 +25,8 @@ static void test_simple_usage(void) {
 
   hfree(arr);
   ASSERT_HEAP_ERROR(HEAP_SUCCESS);
+  printf("freed the array...\n");
+  DUMP_HEAP_PROMPT();
 
   // Fence corruption test
   char* corrupt = (char*)halloc(1600);
@@ -33,6 +35,5 @@ static void test_simple_usage(void) {
   ASSERT_HEAP_ERROR(HEAP_BOUNDARY_ERROR);
   ASSERT_ERRNO(EFAULT);
 
-  DUMP_HEAP_PROMPT();
 }
 #endif

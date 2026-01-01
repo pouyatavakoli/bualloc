@@ -11,10 +11,10 @@ static void test_halloc(void) {
   assert(res == HEAP_SUCCESS);
   ASSERT_HEAP_ERROR(HEAP_SUCCESS);
 
-  void* p1 = halloc(16);
+  void* p1 = halloc(2000);
   ASSERT_HEAP_SUCCESS(p1);
 
-  void* p2 = halloc(32);
+  void* p2 = halloc(2400);
   ASSERT_HEAP_SUCCESS(p2);
 
   // large allocation to trigger out-of-memory

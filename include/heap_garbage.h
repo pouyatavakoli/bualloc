@@ -4,9 +4,6 @@
 #include "heap.h"
 #include "heap_internal.h"
 
-/* Initialize the garbage collector (currently a no-op) */
-void gc_init(void);
-
 /* Register a pointer-to-pointer as a root (e.g., &my_ptr) */
 void gc_add_root(void** root);
 

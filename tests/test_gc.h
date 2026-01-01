@@ -19,8 +19,6 @@ static void test_gc_short_free_and_poison(void) {
   }
   ASSERT_HEAP_ERROR(HEAP_SUCCESS);
 
-  gc_init();
-
   // Allocate objects
   void* objKeep1 = halloc(2000);
   void* objKeep2 = halloc(2000);

@@ -12,6 +12,10 @@
 #include "heap_config.h"
 #include "heap_errors.h"
 #include "heap_internal.h"
+#include "heap_pool.h"
+#include "heap_spray.h"
+
+
 
 /* -------------------------------------------------------------------------- */
 /* Heap state                                                                 */
@@ -26,19 +30,12 @@ typedef struct {
 } HeapState;
 
 static HeapState _heap = {0};
-static HeapErrorCode _heap_last_error = HEAP_SUCCESS;
 
 /* -------------------------------------------------------------------------- */
 /* Utilities                                                                  */
 /* -------------------------------------------------------------------------- */
 
-HeapErrorCode heap_last_error(void) { return _heap_last_error; }
-
-static void heap_set_error(HeapErrorCode code, int err) {
-  _heap_last_error = code;
-  errno = err;
-}
-
+/* Align given size up to nearest page size */
 static size_t align_to_pages(size_t size) {
   long ps = sysconf(_SC_PAGESIZE);
   size_t page_size = (ps > 0) ? (size_t)ps : 4096u;
@@ -47,14 +44,17 @@ static size_t align_to_pages(size_t size) {
   return ((size + page_size - 1) / page_size) * page_size;
 }
 
+/* Set fence bytes to detect buffer overruns */
 static void set_fence(uint8_t* ptr) { memset(ptr, FENCE_PATTERN, FENCE_SIZE); }
 
+/* Check if fence bytes are intact */
 static int check_fence(const uint8_t* ptr) {
   for (size_t i = 0; i < FENCE_SIZE; i++)
     if (ptr[i] != FENCE_PATTERN) return 0;
   return 1;
 }
 
+/* Validate if a pointer belongs to heap and is properly aligned */
 static int is_valid_heap_ptr(void* ptr) {
   if (!_heap.initialized || !ptr) return 0;
 
@@ -73,6 +73,7 @@ static int is_valid_heap_ptr(void* ptr) {
   return 1;
 }
 
+/* Find previous header in free list where a freed block should be inserted */
 static Header* find_insertion_point(Header* freed_block) {
   Header* prev = _heap.freep;
 
@@ -86,10 +87,6 @@ static Header* find_insertion_point(Header* freed_block) {
     } else if (prev < freed_block && freed_block < next) {
       return prev;
     }
-    /* wrapped around the circular list
-     *   - freed_block > prev: should be after the last block
-     *   - freed_block < next: should be before the first block
-     */
     else if (prev >= next && (freed_block > prev || freed_block < next)) {
       return prev;
     }
@@ -104,6 +101,7 @@ static Header* find_insertion_point(Header* freed_block) {
 
 HeapErrorCode hinit(size_t initial_bytes) {
   if (_heap.initialized) return HEAP_SUCCESS;
+  init_pools();
 
   size_t requested = initial_bytes ? initial_bytes : DEFAULT_HEAP_SIZE;
   if (requested < MIN_HEAP_SIZE) requested = MIN_HEAP_SIZE;
@@ -156,11 +154,21 @@ void* halloc(size_t size) {
     heap_set_error(HEAP_NOT_INITIALIZED, EINVAL);
     return NULL;
   }
+  if (heap_spray_check(size) == HEAP_SPRAY_DETECTED) {
+    heap_set_error(HEAP_SPRAY_ATTACK, EACCES);
+    return NULL;
+  }
+
+  void* pool_ptr = pool_alloc(size);
+  if (pool_ptr != NULL) {
+    return pool_ptr;
+  }
 
   if (size > SIZE_MAX - SIZE_ALIGN_MASK) {
     heap_set_error(HEAP_OVERFLOW, ENOMEM);
     return NULL;
   }
+
 
   size_t payload_size = (size + SIZE_ALIGN_MASK) & ~SIZE_ALIGN_MASK;
   if (payload_size > SIZE_MAX - HEADER_SIZE_BYTES - 2 * FENCE_SIZE) {
@@ -226,7 +234,16 @@ void hfree(void* ptr) {
     return;
   }
 
-  if (!ptr || !is_valid_heap_ptr(ptr)) {
+  if (!ptr) {
+    heap_set_error(HEAP_INVALID_POINTER, EINVAL);
+    return;
+  }
+
+  if (pool_free(ptr)) {
+    return;
+  }
+
+  if (!is_valid_heap_ptr(ptr)) {
     heap_set_error(HEAP_INVALID_POINTER, EINVAL);
     return;
   }
@@ -261,7 +278,7 @@ void hfree(void* ptr) {
   CLEAR_INUSE(freed_block);
   freed_block->Info.magic = HEAP_MAGIC_FREE;
 
-  /* --- Coalescing Logic --- */
+  /* Coalescing Logic */
 
   Header* prev = find_insertion_point(freed_block);
   Header* next = prev->Info.next_ptr;
@@ -323,6 +340,7 @@ void heap_walk_dump(void) {
   }
 }
 
+/* Print raw heap bytes */
 void heap_raw_dump(void) {
   if (!_heap.initialized) return;
 
@@ -336,4 +354,25 @@ void heap_raw_dump(void) {
     printf("%02x ", *p);
   }
   printf("\n");
+}
+
+void* heap_start_addr(void) {
+    return _heap.start_addr;
+}
+
+size_t heap_total_size(void) {
+    return _heap.heap_size;
+}
+
+Header* heap_first_block(void) {
+    if (!_heap.initialized) return NULL;
+    return (Header*)_heap.start_addr;
+}
+
+Header* heap_next_block(Header* current) {
+    if (!current) return NULL;
+    size_t size = BLOCK_BYTES(current);
+    char* next = (char*)current + size;
+    char* end = (char*)_heap.start_addr + _heap.heap_size;
+    return (next < end) ? (Header*)next : NULL;
 }

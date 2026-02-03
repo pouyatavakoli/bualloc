@@ -330,3 +330,8 @@ If many same-sized allocations occur rapidly, the behavior is flagged as a poten
 5. [Writing a Simple Garbage Collector in C](https://maplant.com/2020-04-25-Writing-a-Simple-Garbage-Collector-in-C.html)
 6. [Custom memory allocator in C video](https://www.youtube.com/watch?v=CulF4YQt6zA)
 
+
+```
+
+
+_Developed with ❤️ for  Operating System 4041 - [BASU]_
